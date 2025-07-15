@@ -1,0 +1,22 @@
+{
+  "myroom": [
+    {
+      "encrypted": "U2FsdGVkX1/eoUpj3NgwWZBVVBYhPgwICwFQTp+k77jQGNb/PUXVIjNEiAbmwu5D7pu03xE3Gcchrx9OoZSFmGGb0jowaP20p+ZHwIdTBvk=",
+      "timestamp": 1752567073964
+    }
+  ],
+  "skibidiroom": [
+    {
+      "encrypted": "U2FsdGVkX18GodijMNcH1eUxZhkKTdm/ovyzaB+v0OTSSisJ2CaoSVu3RNsR3PJLh2JCRRAuyAihVUU72PvkuhIjMK4kAeqOOVq+jBuVPR2Rj4Osh3iaMkx6Xa7C3gvD",
+      "timestamp": 1752567247421
+    },
+    {
+      "encrypted": "U2FsdGVkX1/aiWyDTD/NWv+1hU9/FUC7Ub6gmpxT1OMKYV8Wa6y12XZdYckakgzhm7HeT8/QzaKZrIEYwAnX28dFrWBfL2CZAQr5c8nwvdkBgQNvXfgSkK8eLLccQE45",
+      "timestamp": 1752567280109
+    },
+    {
+      "encrypted": "U2FsdGVkX1+Hk2cw0lMQX4yla2g8RxaQtJMbXel1L80leVgpd3Dsjc5fLW4PTwS+6KKK75I3BvGB5PmDze9scHs1OFbqDgOoj77iSEueQvw=",
+      "timestamp": 1752567297610
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+
+<!DOCTYPE html>
+<html>
+<head><title>Secure Chat</title></head>
+<body>
+  <h1>Start Encrypted Chat</h1>
+  <button onclick="createRoom()">Create Room</button>
+  <script>
+    function createRoom() {
+      const roomId = Math.random().toString(36).substring(2, 10);
+      window.location.href = `/chat.html?room=${roomId}`;
+    }
+  </script>
+</body>
+</html>
