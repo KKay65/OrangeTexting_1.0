@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Chat History</title>
+  <style>
+    body {
+      background-color: #121212;
+      color: #ffffff;
+      font-family: Arial, sans-serif;
+      padding: 20px;
+    }
+    h2 { margin-bottom: 10px; }
+    input {
+      padding: 6px;
+      margin-right: 10px;
+      background-color: #222;
+      color: #fff;
+      border: 1px solid #444;
+    }
+    #output {
+      margin-top: 20px;
+      background-color: #1e1e1e;
+      padding: 10px;
+      max-height: 500px;
+      overflow-y: auto;
+      border: 1px solid #333;
+    }
+  </style>
+</head>
+<body>
+  <h2>Chat History Viewer</h2>
+  <input id="roomInput" placeholder="Enter room name" />
+  <button onclick="loadHistory()">Load History</button>
+  <div id="output"></div>
+
+  <script>
+    async function loadHistory() {
+      const room = document.getElementById('roomInput').value.trim();
+      if (!room) return;
+
+      const res = await fetch(`/history/${room}`);
+      if (!res.ok) {
+        document.getElementById('output').innerHTML = `<p>Error loading history.</p>`;
+        return;
+      }
+
+      const messages = await res.json();
+      let html = '';
+      for (const msg of messages) {
+        const time = new Date(msg.timestamp).toLocaleString();
+        html += `<p><strong>${msg.user} [${time}]:</strong> ${msg.text}</p>`;
+      }
+      document.getElementById('output').innerHTML = html || '<p>No messages yet.</p>';
+    }
+  </script>
+</body>
+</html>
