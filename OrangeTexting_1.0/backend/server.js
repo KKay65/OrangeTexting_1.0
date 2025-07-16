@@ -10,30 +10,29 @@ const io = socketIo(server);
 
 const PORT = process.env.PORT || 3000;
 
-// Initialize Firebase admin from base64 env var
+// Decode Firebase service account key from base64 env var
 const serviceAccountJson = Buffer.from(process.env.FIREBASE_KEY_B64, 'base64').toString('utf-8');
 const serviceAccount = JSON.parse(serviceAccountJson);
 
+// Initialize Firebase admin SDK
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount)
 });
 
 const db = admin.firestore();
 
-// Serve static frontend files
-app.use('/chat', express.static(path.join(__dirname, 'frontend/chat')));
-app.use('/history', express.static(path.join(__dirname, 'frontend/history')));
+// Serve all frontend files (flat structure) at root paths
+app.use(express.static(path.join(__dirname, 'frontend')));
 
-// Root landing page with links
+// Root route: simple home page with links
 app.get('/', (req, res) => {
   res.send(`
-    <h1>Welcome to OrangeTexting</h1>
-    <p><a href="/chat/chat.html?room=test">Go to Chat</a></p>
-    <p><a href="/history/history.html">View Chat History</a></p>
+    <h1>OrangeTexting</h1>
+    <p><a href="/chat.html?room=test">Go to Chat</a></p>
+    <p><a href="/history.html">View History</a></p>
   `);
 });
 
-// Socket.io handlers
 io.on('connection', (socket) => {
   let currentRoom = null;
 
@@ -41,6 +40,7 @@ io.on('connection', (socket) => {
     socket.join(roomId);
     currentRoom = roomId;
 
+    // Load chat history from Firestore and send encrypted messages
     try {
       const snapshot = await db.collection('messages')
         .doc(roomId)
@@ -49,26 +49,29 @@ io.on('connection', (socket) => {
         .get();
 
       snapshot.forEach(doc => {
-        socket.emit('receive-message', doc.data());
+        const { encrypted } = doc.data();
+        socket.emit('receive-message', encrypted);
       });
     } catch (err) {
       console.error('Failed to load history:', err);
     }
   });
 
-  socket.on('send-message', async (data) => {
+  socket.on('send-message', async (encrypted) => {
     if (!currentRoom) return;
 
+    // Save encrypted message to Firestore
     try {
       await db.collection('messages')
         .doc(currentRoom)
         .collection('chats')
-        .add({ ...data, timestamp: Date.now() });
+        .add({ encrypted, timestamp: Date.now() });
     } catch (err) {
       console.error('Failed to save message:', err);
     }
 
-    io.to(currentRoom).emit('receive-message', data);
+    // Broadcast message to room
+    io.to(currentRoom).emit('receive-message', encrypted);
   });
 
   socket.on('typing', (data) => {
@@ -78,7 +81,7 @@ io.on('connection', (socket) => {
   });
 });
 
-// REST endpoint for history data (returns raw messages)
+// REST API endpoint to get encrypted chat history for a room
 app.get('/history/:roomId', async (req, res) => {
   const { roomId } = req.params;
 
