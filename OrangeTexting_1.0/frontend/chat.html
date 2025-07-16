@@ -1,30 +1,31 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>OrangeTexting Chat</title>
   <style>
-    body {
+    html, body {
+      height: 100%;
       margin: 0;
-      font-family: Arial, sans-serif;
+      padding: 0;
+      font-family: Arial;
       background: #121212;
       color: white;
       display: flex;
       flex-direction: column;
-      height: 100vh;
     }
     #chat {
       flex: 1;
       overflow-y: auto;
       padding: 10px;
       background: #1e1e1e;
+      min-height: 0;
     }
     .message {
       margin-bottom: 12px;
       user-select: text;
       white-space: pre-wrap;
-      word-break: break-word;
     }
     .message img {
       max-width: 90%;
@@ -47,9 +48,6 @@
       border-radius: 4px;
       color: white;
       resize: none;
-      min-height: 50px;
-      max-height: 150px;
-      font-size: 1rem;
     }
     #upload-btn, #send-btn {
       background: #444;
@@ -58,8 +56,6 @@
       padding: 10px;
       margin-left: 10px;
       cursor: pointer;
-      border-radius: 4px;
-      flex-shrink: 0;
     }
     @media (max-width: 600px) {
       #input-area {
@@ -74,21 +70,17 @@
   </style>
 </head>
 <body>
-  <div id="chat" aria-live="polite" aria-atomic="false"></div>
+  <div id="chat"></div>
   <div id="input-area">
-    <textarea id="input" rows="2" placeholder="Enter message... (Enter to send, Shift+Enter for newline)" aria-label="Message input"></textarea>
-    <input type="file" id="upload-btn" accept="image/*" aria-label="Upload image" />
-    <button id="send-btn" aria-label="Send message">Send</button>
+    <textarea id="input" rows="2" placeholder="Enter message... (Enter to send, Shift+Enter for newline)"></textarea>
+    <input type="file" id="upload-btn" accept="image/*">
+    <button id="send-btn">Send</button>
   </div>
 
   <script src="/socket.io/socket.io.js"></script>
   <script>
     const socket = io();
     const room = new URLSearchParams(window.location.search).get("room");
-    if (!room) {
-      alert("No room specified. Please add ?room=roomname in URL.");
-      throw new Error("No room specified");
-    }
     const username = prompt("Enter your name:") || "Anonymous";
 
     socket.emit('join-room', { roomId: room });
@@ -106,7 +98,6 @@
       if (imageData) {
         const img = document.createElement('img');
         img.src = imageData;
-        img.alt = "Uploaded image";
         div.appendChild(img);
       }
       chat.appendChild(div);
@@ -125,14 +116,14 @@
         reader.onload = () => {
           const imageData = reader.result;
           socket.emit('send-message', { user: username, text, imageData, timestamp: Date.now() });
-          input.value = '';
-          uploadBtn.value = '';
         };
         reader.readAsDataURL(file);
       } else {
         socket.emit('send-message', { user: username, text, timestamp: Date.now() });
-        input.value = '';
       }
+
+      input.value = '';
+      uploadBtn.value = '';
     };
 
     input.addEventListener('keydown', e => {
