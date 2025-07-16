@@ -4,22 +4,23 @@ const http = require('http').createServer(app);
 const io = require('socket.io')(http);
 const path = require('path');
 const admin = require('firebase-admin');
+
 const PORT = process.env.PORT || 3000;
 
-// Initialize Firebase
-const serviceAccount = require('./firebaseKey.json');
+// === FIREBASE INITIALIZATION ===
+const serviceAccount = JSON.parse(process.env.FIREBASE_KEY_JSON);
 
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount)
 });
 
 const db = admin.firestore();
-const messagesRef = db.collection('rooms');
+const messagesRef = db.collection('messages');
 
-// Serve frontend
+// === STATIC FRONTEND ===
 app.use('/frontend', express.static(path.join(__dirname, '../frontend')));
 
-// WebSocket logic
+// === SOCKET.IO HANDLING ===
 io.on('connection', socket => {
   let currentRoom = null;
 
@@ -27,29 +28,26 @@ io.on('connection', socket => {
     socket.join(roomId);
     currentRoom = roomId;
 
-    // Load history from Firestore
-    const roomDoc = await messagesRef.doc(roomId).get();
-    const data = roomDoc.data();
-    const history = data?.messages || [];
-
-    history.forEach(entry => {
-      socket.emit('receive-message', entry.encrypted);
+    // Load message history from Firestore
+    const snapshot = await messagesRef.where('room', '==', roomId).orderBy('timestamp').get();
+    snapshot.forEach(doc => {
+      socket.emit('receive-message', doc.data().encrypted);
     });
   });
 
   socket.on('send-message', async encrypted => {
-    const rooms = Array.from(socket.rooms).filter(r => r !== socket.id);
-    if (rooms.length === 0) return;
-    const roomId = rooms[0];
+    if (!currentRoom) return;
 
-    // Save to Firestore
-    const roomDoc = messagesRef.doc(roomId);
-    const existing = (await roomDoc.get()).data()?.messages || [];
-    existing.push({ encrypted, timestamp: Date.now() });
-    await roomDoc.set({ messages: existing });
+    // Save message to Firestore
+    await messagesRef.add({
+      room: currentRoom,
+      encrypted,
+      timestamp: Date.now()
+    });
 
-    socket.to(roomId).emit('receive-message', encrypted);
-    socket.emit('receive-message', encrypted);
+    // Broadcast to others
+    socket.to(currentRoom).emit('receive-message', encrypted);
+    socket.emit('receive-message', encrypted); // echo to self
   });
 
   socket.on('typing', data => {
@@ -59,14 +57,17 @@ io.on('connection', socket => {
   });
 });
 
-// History endpoint
+// === REST API: HISTORY ===
 app.get('/history/:roomId', async (req, res) => {
   const roomId = req.params.roomId;
-  const doc = await messagesRef.doc(roomId).get();
-  const data = doc.data();
-  res.json(data?.messages || []);
+  const snapshot = await messagesRef.where('room', '==', roomId).orderBy('timestamp').get();
+
+  const result = [];
+  snapshot.forEach(doc => result.push(doc.data()));
+  res.json(result);
 });
 
+// === START SERVER ===
 http.listen(PORT, () => {
   console.log(`Server running at http://localhost:${PORT}`);
 });
