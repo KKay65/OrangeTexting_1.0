@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -8,23 +8,26 @@
     html, body {
       height: 100%;
       margin: 0;
-      font-family: Arial;
+      font-family: Arial, sans-serif;
       background-color: #121212;
       color: white;
       display: flex;
       flex-direction: column;
     }
+
     #chat {
       flex: 1;
       overflow-y: auto;
       padding: 10px;
       background-color: #1e1e1e;
     }
+
     .message {
       margin-bottom: 14px;
       white-space: pre-wrap;
       user-select: text;
     }
+
     .message img {
       width: 100%;
       max-width: 400px;
@@ -33,12 +36,14 @@
       border-radius: 8px;
       display: block;
     }
+
     #input-area {
       display: flex;
       flex-wrap: wrap;
       padding: 10px;
       background: #222;
     }
+
     #input {
       flex: 1;
       padding: 10px;
@@ -47,7 +52,9 @@
       border: 1px solid #555;
       border-radius: 4px;
       resize: none;
+      font-size: 1rem;
     }
+
     #upload-btn, #send-btn {
       background: #444;
       color: white;
@@ -55,11 +62,14 @@
       padding: 10px;
       margin-left: 10px;
       cursor: pointer;
+      font-size: 1rem;
     }
+
     @media (max-width: 600px) {
       #input-area {
         flex-direction: column;
       }
+
       #upload-btn, #send-btn {
         margin-left: 0;
         margin-top: 10px;
@@ -71,7 +81,7 @@
 <body>
   <div id="chat"></div>
   <div id="input-area">
-    <textarea id="input" rows="2" placeholder="Type message (Enter to send, Shift+Enter for newline)"></textarea>
+    <textarea id="input" rows="2" placeholder="Type message... (Enter to send, Shift+Enter for newline)"></textarea>
     <input type="file" id="upload-btn" accept="image/*">
     <button id="send-btn">Send</button>
   </div>
@@ -79,62 +89,76 @@
   <script src="/socket.io/socket.io.js"></script>
   <script>
     const socket = io();
-    const room = new URLSearchParams(window.location.search).get("room");
+    const urlParams = new URLSearchParams(window.location.search);
+    const room = urlParams.get("room");
     const username = prompt("Enter your name:") || "Anonymous";
-
-    socket.emit("join-room", { roomId: room });
 
     const chat = document.getElementById("chat");
     const input = document.getElementById("input");
     const sendBtn = document.getElementById("send-btn");
     const uploadBtn = document.getElementById("upload-btn");
 
+    if (!room) {
+      alert("Missing room parameter in URL. Use ?room=roomName");
+      throw new Error("Missing room");
+    }
+
+    socket.emit("join-room", { roomId: room });
+
+    socket.on("receive-message", (data) => {
+      addMessage(data);
+    });
+
     function addMessage({ user, text, timestamp, imageData }) {
       const div = document.createElement("div");
       div.className = "message";
       const time = new Date(timestamp || Date.now()).toLocaleTimeString();
-      div.innerHTML = `<strong>${user} [${time}]:</strong> ${text || ''}`;
+      div.innerHTML = `<strong>${user} [${time}]:</strong>${text ? " " + text : ""}`;
+
       if (imageData) {
         const img = document.createElement("img");
         img.src = imageData;
         img.alt = "Uploaded image";
         div.appendChild(img);
       }
+
       chat.appendChild(div);
       chat.scrollTop = chat.scrollHeight;
     }
-
-    socket.on("receive-message", addMessage);
 
     sendBtn.onclick = () => {
       const text = input.value.trim();
       const file = uploadBtn.files[0];
       if (!text && !file) return;
 
+      const msg = {
+        user: username,
+        text,
+        timestamp: Date.now()
+      };
+
       if (file) {
         const reader = new FileReader();
         reader.onload = () => {
-          socket.emit("send-message", {
-            user: username,
-            text,
-            imageData: reader.result,
-            timestamp: Date.now()
-          });
+          msg.imageData = reader.result;
+          socket.emit("send-message", msg);
+          addMessage(msg); // Instant preview
+          resetInput();
         };
         reader.readAsDataURL(file);
       } else {
-        socket.emit("send-message", {
-          user: username,
-          text,
-          timestamp: Date.now()
-        });
+        socket.emit("send-message", msg);
+        addMessage(msg);
+        resetInput();
       }
-
-      input.value = "";
-      uploadBtn.value = "";
     };
 
-    input.addEventListener("keydown", e => {
+    function resetInput() {
+      input.value = "";
+      uploadBtn.value = "";
+    }
+
+    input.addEventListener("keydown", (e) => {
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
         sendBtn.click();
