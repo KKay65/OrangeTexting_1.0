@@ -24,6 +24,7 @@
       max-height: 500px;
       overflow-y: auto;
       border: 1px solid #333;
+      white-space: pre-wrap;
     }
   </style>
 </head>
@@ -33,24 +34,54 @@
   <button onclick="loadHistory()">Load History</button>
   <div id="output"></div>
 
+  <!-- Include CryptoJS for AES decryption -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
   <script>
+    // Replace this with your actual encryption key
+    const encryptionKey = 'your-secret-key';
+
+    function decrypt(encrypted) {
+      try {
+        const bytes = CryptoJS.AES.decrypt(encrypted, encryptionKey);
+        const decrypted = bytes.toString(CryptoJS.enc.Utf8);
+        return decrypted || '[decryption failed]';
+      } catch (e) {
+        return '[decryption error]';
+      }
+    }
+
     async function loadHistory() {
       const room = document.getElementById('roomInput').value.trim();
       if (!room) return;
 
-      const res = await fetch(`/history/${room}`);
-      if (!res.ok) {
-        document.getElementById('output').innerHTML = `<p>Error loading history.</p>`;
-        return;
-      }
+      const output = document.getElementById('output');
+      output.innerHTML = 'Loading...';
 
-      const messages = await res.json();
-      let html = '';
-      for (const msg of messages) {
-        const time = new Date(msg.timestamp).toLocaleString();
-        html += `<p><strong>${msg.user} [${time}]:</strong> ${msg.text}</p>`;
+      try {
+        const res = await fetch(`/history/${room}`);
+        if (!res.ok) {
+          output.innerHTML = `<p>Error loading history.</p>`;
+          return;
+        }
+
+        const messages = await res.json();
+
+        if (!messages.length) {
+          output.innerHTML = '<p>No messages yet.</p>';
+          return;
+        }
+
+        let html = '';
+        for (const msg of messages) {
+          const time = new Date(msg.timestamp).toLocaleString();
+          const decryptedText = decrypt(msg.encrypted);
+          html += `<p><strong>[${time}]:</strong> ${decryptedText}</p>`;
+        }
+
+        output.innerHTML = html;
+      } catch (err) {
+        output.innerHTML = `<p>Error: ${err.message}</p>`;
       }
-      document.getElementById('output').innerHTML = html || '<p>No messages yet.</p>';
     }
   </script>
 </body>
