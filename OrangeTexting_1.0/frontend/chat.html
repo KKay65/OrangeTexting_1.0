@@ -125,7 +125,6 @@
             timestamp: Date.now()
           };
           socket.emit('send-message', message);
-          addMessage(message); // optional: show immediately
           input.value = '';
           uploadBtn.value = '';
         };
