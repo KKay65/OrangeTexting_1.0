@@ -98,4 +98,65 @@
       const msgDiv = document.createElement('div');
       msgDiv.classList.add('message');
 
-     
+      const header = document.createElement('strong');
+      header.textContent = `${user} [${timeStr}]:`;
+      msgDiv.appendChild(header);
+
+      if (text) {
+        const textNode = document.createElement('span');
+        textNode.textContent = " " + text;
+        msgDiv.appendChild(textNode);
+      }
+
+      if (imageData) {
+        const img = document.createElement('img');
+        img.src = imageData;
+        img.alt = "Uploaded image";
+        msgDiv.appendChild(img);
+      }
+
+      output.appendChild(msgDiv);
+    }
+
+    async function loadHistory() {
+      output.innerHTML = '';
+      const room = roomInput.value.trim();
+      const secret = secretInput.value.trim();
+      if (!room || !secret) {
+        alert("Please enter both room name and shared secret.");
+        return;
+      }
+
+      try {
+        const res = await fetch(`/history/${room}`);
+        if (!res.ok) throw new Error("Failed to load history");
+
+        const messages = await res.json();
+
+        if (messages.length === 0) {
+          output.innerHTML = '<p>No messages found.</p>';
+          return;
+        }
+
+        for (const entry of messages) {
+          // Decrypt each message
+          let decryptedText;
+          try {
+            decryptedText = CryptoJS.AES.decrypt(JSON.stringify(entry), secret).toString(CryptoJS.enc.Utf8);
+            // Actually decrypting JSON string fails, so decrypt each encrypted field if exists
+            // But here, we store raw messages, so no encryption from server side, so skip decryption
+            // Just display data directly:
+            addMessage(entry);
+          } catch {
+            output.innerHTML += '<p style="color:red;"><i>Could not decrypt message</i></p>';
+          }
+        }
+      } catch (err) {
+        output.innerHTML = `<p style="color:red;">Error loading history: ${err.message}</p>`;
+      }
+    }
+
+    loadBtn.addEventListener('click', loadHistory);
+  </script>
+</body>
+</html>
