@@ -81,8 +81,6 @@
     const room = new URLSearchParams(window.location.search).get("room");
     const username = prompt("Enter your name:") || "Anonymous";
 
-    socket.emit('join-room', { roomId: room });
-
     const chat = document.getElementById('chat');
     const input = document.getElementById('input');
     const sendBtn = document.getElementById('send-btn');
@@ -92,8 +90,8 @@
       const div = document.createElement('div');
       div.className = 'message';
       const time = new Date(timestamp || Date.now()).toLocaleTimeString();
-      const content = `<strong>${user} [${time}]:</strong> ${text || ''}`;
-      div.innerHTML = content;
+      const header = `<strong>${user} [${time}]:</strong> ${text || ''}`;
+      div.innerHTML = header;
 
       if (imageData) {
         const img = document.createElement('img');
@@ -105,6 +103,8 @@
       chat.appendChild(div);
       chat.scrollTop = chat.scrollHeight;
     }
+
+    socket.emit('join-room', { roomId: room });
 
     socket.on('receive-message', addMessage);
 
@@ -136,7 +136,6 @@
           timestamp: Date.now()
         };
         socket.emit('send-message', message);
-        addMessage(message); // optional: show immediately
         input.value = '';
       }
     };
