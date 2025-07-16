@@ -1,85 +1,101 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Chat History Viewer</title>
+  <title>Chat History</title>
   <style>
     body {
       background-color: #121212;
-      color: #ffffff;
+      color: #fff;
       font-family: Arial, sans-serif;
       padding: 20px;
     }
-    h2 { margin-bottom: 10px; }
-    input {
-      padding: 6px;
-      margin-right: 10px;
-      background-color: #222;
+    input, button {
+      background-color: #333;
       color: #fff;
-      border: 1px solid #444;
+      border: 1px solid #555;
+      padding: 8px;
+      margin: 10px 0;
+      width: 100%;
+      box-sizing: border-box;
     }
     #output {
-      margin-top: 20px;
       background-color: #1e1e1e;
-      padding: 10px;
-      max-height: 500px;
-      overflow-y: auto;
       border: 1px solid #333;
+      padding: 10px;
+      max-height: 70vh;
+      overflow-y: auto;
+      word-wrap: break-word;
     }
-  </style>
-  <!-- CryptoJS Library for AES Decryption -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
-</head>
-<body>
-  <h2>Chat History Viewer</h2>
-  <input id="roomInput" placeholder="Enter room name" />
-  <button onclick="loadHistory()">Load History</button>
-  <div id="output"></div>
-
-  <script>
-    const SECRET_KEY = "300"; // Your encryption key here
-
-    function decryptMessage(encrypted) {
-      try {
-        const bytes = CryptoJS.AES.decrypt(encrypted, SECRET_KEY);
-        const originalText = bytes.toString(CryptoJS.enc.Utf8);
-        if (!originalText) return "[decryption error]";
-        
-        // Parse decrypted JSON string to get user and text
-        const parsed = JSON.parse(originalText);
-        const user = parsed.user || "anon";
-        const text = parsed.text || "[no text]";
-        return `${user}: ${text}`;
-      } catch (e) {
-        return "[decryption error]";
+    .message {
+      margin: 8px 0;
+      user-select: text;
+    }
+    .chat-image {
+      max-width: 100%;
+      border: 1px solid #555;
+      border-radius: 4px;
+      margin: 4px 0;
+    }
+    @media (max-width: 600px) {
+      #output {
+        max-height: 50vh;
       }
     }
+  </style>
+</head>
+<body>
+  <h2>🔍 Chat History Viewer</h2>
+  <input id="roomInput" placeholder="Enter room name" />
+  <input id="secretInput" placeholder="Enter shared secret" />
+  <button onclick="loadHistory()">Load</button>
+  <div id="output"></div>
 
+  <script src="https://cdn.jsdelivr.net/npm/crypto-js@4.1.1/crypto-js.js"></script>
+  <script>
     async function loadHistory() {
       const room = document.getElementById('roomInput').value.trim();
-      if (!room) return;
+      const secret = document.getElementById('secretInput').value.trim();
+      const output = document.getElementById('output');
+      output.innerHTML = '';
+
+      if (!room || !secret) {
+        output.innerHTML = "<p>Please enter both room name and secret.</p>";
+        return;
+      }
 
       try {
         const res = await fetch(`/history/${room}`);
-        if (!res.ok) {
-          document.getElementById('output').innerHTML = `<p>Error loading history.</p>`;
-          return;
-        }
-
         const messages = await res.json();
-        if (messages.length === 0) {
-          document.getElementById('output').innerHTML = '<p>No messages yet.</p>';
-          return;
+
+        for (const entry of messages) {
+          try {
+            const decrypted = CryptoJS.AES.decrypt(entry.encrypted, secret).toString(CryptoJS.enc.Utf8);
+            const data = JSON.parse(decrypted);
+            const time = new Date(data.timestamp || Date.now()).toLocaleString();
+
+            const div = document.createElement('div');
+            div.className = 'message';
+
+            if (data.type === 'image') {
+              div.innerHTML = `<strong>${data.user} [${time}]:</strong><br><img class="chat-image" src="${data.data}" alt="image" />`;
+            } else {
+              div.innerHTML = `<strong>${data.user} [${time}]:</strong> ${data.text}`;
+            }
+
+            output.appendChild(div);
+          } catch {
+            const div = document.createElement('div');
+            div.innerHTML = '<p style="color:red;"><i>Could not decrypt a message.</i></p>';
+            output.appendChild(div);
+          }
         }
 
-        let html = '';
-        for (const msg of messages) {
-          const time = new Date(msg.timestamp).toLocaleString();
-          const decryptedText = decryptMessage(msg.encrypted);
-          html += `<p><strong>[${time}]:</strong> ${decryptedText}</p>`;
+        if (output.innerHTML.trim() === '') {
+          output.innerHTML = '<p>No messages found.</p>';
         }
-        document.getElementById('output').innerHTML = html;
-      } catch {
-        document.getElementById('output').innerHTML = `<p>Error loading history.</p>`;
+      } catch (err) {
+        console.error(err);
+        output.innerHTML = '<p style="color:red;">Failed to load chat history.</p>';
       }
     }
   </script>

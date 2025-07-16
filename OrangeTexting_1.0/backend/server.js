@@ -1,82 +1,88 @@
 const express = require('express');
-const app = express();
-const http = require('http').createServer(app);
-const io = require('socket.io')(http);
 const path = require('path');
+const http = require('http');
+const socketIo = require('socket.io');
 const admin = require('firebase-admin');
 
+const app = express();
+const server = http.createServer(app);
+const io = socketIo(server);
 const PORT = process.env.PORT || 3000;
 
-// 🔐 Decode and initialize Firebase
-const decoded = Buffer.from(process.env.FIREBASE_KEY_B64, 'base64').toString('utf-8');
-const serviceAccount = JSON.parse(decoded);
+// Firebase service key setup
+const serviceAccountJson = Buffer.from(process.env.FIREBASE_KEY_B64, 'base64').toString('utf-8');
+const serviceAccount = JSON.parse(serviceAccountJson);
 
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount)
 });
 
 const db = admin.firestore();
-
-// Serve frontend
 app.use('/frontend', express.static(path.join(__dirname, '../frontend')));
 
-io.on('connection', socket => {
+io.on('connection', (socket) => {
   let currentRoom = null;
 
   socket.on('join-room', async ({ roomId }) => {
     socket.join(roomId);
     currentRoom = roomId;
 
-    // Load history from Firestore
     try {
-      const snapshot = await db.collection('messages').doc(roomId).collection('chats').orderBy('timestamp').get();
+      const snapshot = await db.collection('messages')
+        .doc(roomId)
+        .collection('chats')
+        .orderBy('timestamp')
+        .get();
+
       snapshot.forEach(doc => {
-        const msg = doc.data();
-        socket.emit('receive-message', msg.encrypted);
+        const { encrypted } = doc.data();
+        socket.emit('receive-message', encrypted);
       });
-    } catch (e) {
-      console.error('Error loading history:', e);
+    } catch (err) {
+      console.error('Failed to load history:', err);
     }
   });
 
-  socket.on('send-message', async encrypted => {
+  socket.on('send-message', async (encrypted) => {
     if (!currentRoom) return;
 
     try {
       await db.collection('messages')
-              .doc(currentRoom)
-              .collection('chats')
-              .add({ encrypted, timestamp: Date.now() });
-    } catch (e) {
-      console.error('Error saving message:', e);
+        .doc(currentRoom)
+        .collection('chats')
+        .add({ encrypted, timestamp: Date.now() });
+    } catch (err) {
+      console.error('Failed to save message:', err);
     }
 
-    socket.to(currentRoom).emit('receive-message', encrypted);
-    socket.emit('receive-message', encrypted);
+    io.to(currentRoom).emit('receive-message', encrypted);
   });
 
-  socket.on('typing', data => {
+  socket.on('typing', (data) => {
     if (currentRoom) {
       socket.to(currentRoom).emit('typing', data);
     }
   });
 });
 
-// Endpoint to view history manually
 app.get('/history/:roomId', async (req, res) => {
-  const roomId = req.params.roomId;
+  const { roomId } = req.params;
   try {
-    const snapshot = await db.collection('messages').doc(roomId).collection('chats').orderBy('timestamp').get();
+    const snapshot = await db.collection('messages')
+      .doc(roomId)
+      .collection('chats')
+      .orderBy('timestamp')
+      .get();
+
     const messages = [];
-    snapshot.forEach(doc => {
-      messages.push(doc.data());
-    });
+    snapshot.forEach(doc => messages.push(doc.data()));
     res.json(messages);
-  } catch (e) {
+  } catch (err) {
+    console.error('Error fetching history:', err);
     res.status(500).json({ error: 'Failed to load messages' });
   }
 });
 
-http.listen(PORT, () => {
+server.listen(PORT, () => {
   console.log(`Server running at http://localhost:${PORT}`);
 });
