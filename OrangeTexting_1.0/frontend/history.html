@@ -1,73 +1,45 @@
-<!DOCTYPE html>
-<html>
-<head>
-  <title>Chat History Viewer</title>
-  <style>
-    body {
-      background-color: #121212;
-      color: #ffffff;
-      font-family: Arial, sans-serif;
-      padding: 20px;
-    }
-    h2 { margin-bottom: 10px; }
-    input {
-      padding: 6px;
-      margin-right: 10px;
-      background-color: #222;
-      color: #fff;
-      border: 1px solid #444;
-    }
-    #output {
-      margin-top: 20px;
-      background-color: #1e1e1e;
-      padding: 10px;
-      max-height: 500px;
-      overflow-y: auto;
-      border: 1px solid #333;
-    }
-  </style>
-  <!-- CryptoJS Library for AES Decryption -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
-</head>
-<body>
-  <h2>Chat History Viewer</h2>
-  <input id="roomInput" placeholder="Enter room name" />
-  <button onclick="loadHistory()">Load History</button>
-  <div id="output"></div>
+<script>
+  const SECRET_KEY = "300"; // Replace with your actual encryption key
 
-  <script>
-    const SECRET_KEY = "300"; // Replace with your encryption key
+  function decryptMessage(encrypted) {
+    try {
+      const bytes = CryptoJS.AES.decrypt(encrypted, SECRET_KEY);
+      const originalText = bytes.toString(CryptoJS.enc.Utf8);
+      return originalText || "[decryption error]";
+    } catch (e) {
+      return "[decryption error]";
+    }
+  }
 
-    function decryptMessage(encrypted) {
-      try {
-        const bytes = CryptoJS.AES.decrypt(encrypted, SECRET_KEY);
-        const originalText = bytes.toString(CryptoJS.enc.Utf8);
-        return originalText || "[decryption error]";
-      } catch (e) {
-        return "[decryption error]";
-      }
+  async function loadHistory() {
+    const room = document.getElementById('roomInput').value.trim();
+    if (!room) return;
+
+    const res = await fetch(`/history/${room}`);
+    if (!res.ok) {
+      document.getElementById('output').innerHTML = `<p>Error loading history.</p>`;
+      return;
     }
 
-    async function loadHistory() {
-      const room = document.getElementById('roomInput').value.trim();
-      if (!room) return;
+    const messages = await res.json();
+    let html = '';
+    for (const msg of messages) {
+      const time = new Date(msg.timestamp).toLocaleString();
 
-      const res = await fetch(`/history/${room}`);
-      if (!res.ok) {
-        document.getElementById('output').innerHTML = `<p>Error loading history.</p>`;
-        return;
+      // Check if encrypted message exists and is non-empty
+      let displayedText = "";
+      if (msg.encrypted) {
+        displayedText = decryptMessage(msg.encrypted);
+      } else if (msg.text) {
+        displayedText = msg.text;
+      } else {
+        displayedText = "[no message text]";
       }
 
-      const messages = await res.json();
-      let html = '';
-      for (const msg of messages) {
-        const time = new Date(msg.timestamp).toLocaleString();
-        // msg.encrypted is your encrypted string
-        const decryptedText = decryptMessage(msg.encrypted);
-        html += `<p><strong>${msg.user || 'anon'} [${time}]:</strong> ${decryptedText}</p>`;
-      }
-      document.getElementById('output').innerHTML = html || '<p>No messages yet.</p>';
+      const user = msg.user || "anon";
+      html += `<p><strong>${user} [${time}]:</strong> ${displayedText}</p>`;
     }
-  </script>
-</body>
-</html>
+    document.getElementById('output').innerHTML = html || '<p>No messages yet.</p>';
+  }
+</script>
+
