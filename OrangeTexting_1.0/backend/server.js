@@ -7,20 +7,19 @@ const admin = require('firebase-admin');
 
 const PORT = process.env.PORT || 3000;
 
-// === FIREBASE INITIALIZATION ===
-const serviceAccount = JSON.parse(process.env.FIREBASE_KEY_JSON);
+// 🔐 Decode and initialize Firebase
+const decoded = Buffer.from(process.env.FIREBASE_KEY_B64, 'base64').toString('utf-8');
+const serviceAccount = JSON.parse(decoded);
 
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount)
 });
 
 const db = admin.firestore();
-const messagesRef = db.collection('messages');
 
-// === STATIC FRONTEND ===
+// Serve frontend
 app.use('/frontend', express.static(path.join(__dirname, '../frontend')));
 
-// === SOCKET.IO HANDLING ===
 io.on('connection', socket => {
   let currentRoom = null;
 
@@ -28,26 +27,32 @@ io.on('connection', socket => {
     socket.join(roomId);
     currentRoom = roomId;
 
-    // Load message history from Firestore
-    const snapshot = await messagesRef.where('room', '==', roomId).orderBy('timestamp').get();
-    snapshot.forEach(doc => {
-      socket.emit('receive-message', doc.data().encrypted);
-    });
+    // Load history from Firestore
+    try {
+      const snapshot = await db.collection('messages').doc(roomId).collection('chats').orderBy('timestamp').get();
+      snapshot.forEach(doc => {
+        const msg = doc.data();
+        socket.emit('receive-message', msg.encrypted);
+      });
+    } catch (e) {
+      console.error('Error loading history:', e);
+    }
   });
 
   socket.on('send-message', async encrypted => {
     if (!currentRoom) return;
 
-    // Save message to Firestore
-    await messagesRef.add({
-      room: currentRoom,
-      encrypted,
-      timestamp: Date.now()
-    });
+    try {
+      await db.collection('messages')
+              .doc(currentRoom)
+              .collection('chats')
+              .add({ encrypted, timestamp: Date.now() });
+    } catch (e) {
+      console.error('Error saving message:', e);
+    }
 
-    // Broadcast to others
     socket.to(currentRoom).emit('receive-message', encrypted);
-    socket.emit('receive-message', encrypted); // echo to self
+    socket.emit('receive-message', encrypted);
   });
 
   socket.on('typing', data => {
@@ -57,17 +62,21 @@ io.on('connection', socket => {
   });
 });
 
-// === REST API: HISTORY ===
+// Endpoint to view history manually
 app.get('/history/:roomId', async (req, res) => {
   const roomId = req.params.roomId;
-  const snapshot = await messagesRef.where('room', '==', roomId).orderBy('timestamp').get();
-
-  const result = [];
-  snapshot.forEach(doc => result.push(doc.data()));
-  res.json(result);
+  try {
+    const snapshot = await db.collection('messages').doc(roomId).collection('chats').orderBy('timestamp').get();
+    const messages = [];
+    snapshot.forEach(doc => {
+      messages.push(doc.data());
+    });
+    res.json(messages);
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to load messages' });
+  }
 });
 
-// === START SERVER ===
 http.listen(PORT, () => {
   console.log(`Server running at http://localhost:${PORT}`);
 });
