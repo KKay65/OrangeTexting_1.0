@@ -3,57 +3,50 @@ const app = express();
 const http = require('http').createServer(app);
 const io = require('socket.io')(http);
 const path = require('path');
-const fs = require('fs');
+const admin = require('firebase-admin');
+const PORT = process.env.PORT || 3000;
 
-const PORT = 3000;
-const MESSAGES_FILE = path.join(__dirname, 'messages.json');
+// Initialize Firebase
+const serviceAccount = require('./firebaseKey.json');
+
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount)
+});
+
+const db = admin.firestore();
+const messagesRef = db.collection('rooms');
 
 // Serve frontend
 app.use('/frontend', express.static(path.join(__dirname, '../frontend')));
 
-// Ensure messages.json exists
-if (!fs.existsSync(MESSAGES_FILE)) fs.writeFileSync(MESSAGES_FILE, '{}');
-
-function loadMessages() {
-  return JSON.parse(fs.readFileSync(MESSAGES_FILE));
-}
-
-function saveMessages(data) {
-  fs.writeFileSync(MESSAGES_FILE, JSON.stringify(data, null, 2));
-}
-
+// WebSocket logic
 io.on('connection', socket => {
   let currentRoom = null;
 
-  socket.on('join-room', ({ roomId }) => {
-    const room = io.sockets.adapter.rooms.get(roomId);
-    if (room && room.size >= 100) {
-      socket.emit('room-full');
-      return;
-    }
+  socket.on('join-room', async ({ roomId }) => {
     socket.join(roomId);
     currentRoom = roomId;
 
-    const messages = loadMessages();
-    if (messages[roomId]) {
-      messages[roomId].forEach(msg => {
-        socket.emit('receive-message', msg.encrypted);
-      });
-    }
+    // Load history from Firestore
+    const roomDoc = await messagesRef.doc(roomId).get();
+    const data = roomDoc.data();
+    const history = data?.messages || [];
+
+    history.forEach(entry => {
+      socket.emit('receive-message', entry.encrypted);
+    });
   });
 
-  socket.on('send-message', encrypted => {
+  socket.on('send-message', async encrypted => {
     const rooms = Array.from(socket.rooms).filter(r => r !== socket.id);
     if (rooms.length === 0) return;
     const roomId = rooms[0];
 
-    const messages = loadMessages();
-    if (!messages[roomId]) messages[roomId] = [];
-    messages[roomId].push({
-      encrypted,
-      timestamp: Date.now()
-    });
-    saveMessages(messages);
+    // Save to Firestore
+    const roomDoc = messagesRef.doc(roomId);
+    const existing = (await roomDoc.get()).data()?.messages || [];
+    existing.push({ encrypted, timestamp: Date.now() });
+    await roomDoc.set({ messages: existing });
 
     socket.to(roomId).emit('receive-message', encrypted);
     socket.emit('receive-message', encrypted);
@@ -66,10 +59,12 @@ io.on('connection', socket => {
   });
 });
 
-app.get('/history/:roomId', (req, res) => {
-  const messages = loadMessages();
+// History endpoint
+app.get('/history/:roomId', async (req, res) => {
   const roomId = req.params.roomId;
-  res.json(messages[roomId] || []);
+  const doc = await messagesRef.doc(roomId).get();
+  const data = doc.data();
+  res.json(data?.messages || []);
 });
 
 http.listen(PORT, () => {
