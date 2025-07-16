@@ -10,21 +10,30 @@ const io = socketIo(server);
 
 const PORT = process.env.PORT || 3000;
 
-// Decode Firebase service account key from base64 env var
+// Initialize Firebase admin from base64 env var
 const serviceAccountJson = Buffer.from(process.env.FIREBASE_KEY_B64, 'base64').toString('utf-8');
 const serviceAccount = JSON.parse(serviceAccountJson);
 
-// Initialize Firebase admin SDK
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount)
 });
 
 const db = admin.firestore();
 
-// Serve frontend static files
+// Serve static frontend files
 app.use('/chat', express.static(path.join(__dirname, 'frontend/chat')));
 app.use('/history', express.static(path.join(__dirname, 'frontend/history')));
 
+// Root landing page with links
+app.get('/', (req, res) => {
+  res.send(`
+    <h1>Welcome to OrangeTexting</h1>
+    <p><a href="/chat/chat.html?room=test">Go to Chat</a></p>
+    <p><a href="/history/history.html">View Chat History</a></p>
+  `);
+});
+
+// Socket.io handlers
 io.on('connection', (socket) => {
   let currentRoom = null;
 
@@ -40,25 +49,26 @@ io.on('connection', (socket) => {
         .get();
 
       snapshot.forEach(doc => {
-        const { encrypted } = doc.data();
-        socket.emit('receive-message', encrypted);
+        socket.emit('receive-message', doc.data());
       });
     } catch (err) {
       console.error('Failed to load history:', err);
     }
   });
 
-  socket.on('send-message', async (encrypted) => {
+  socket.on('send-message', async (data) => {
     if (!currentRoom) return;
+
     try {
       await db.collection('messages')
         .doc(currentRoom)
         .collection('chats')
-        .add({ encrypted, timestamp: Date.now() });
+        .add({ ...data, timestamp: Date.now() });
     } catch (err) {
       console.error('Failed to save message:', err);
     }
-    io.to(currentRoom).emit('receive-message', encrypted);
+
+    io.to(currentRoom).emit('receive-message', data);
   });
 
   socket.on('typing', (data) => {
@@ -68,7 +78,7 @@ io.on('connection', (socket) => {
   });
 });
 
-// REST endpoint for raw encrypted chat history JSON
+// REST endpoint for history data (returns raw messages)
 app.get('/history/:roomId', async (req, res) => {
   const { roomId } = req.params;
 
@@ -80,7 +90,9 @@ app.get('/history/:roomId', async (req, res) => {
       .get();
 
     const messages = [];
-    snapshot.forEach(doc => messages.push(doc.data()));
+    snapshot.forEach(doc => {
+      messages.push(doc.data());
+    });
 
     res.json(messages);
   } catch (err) {

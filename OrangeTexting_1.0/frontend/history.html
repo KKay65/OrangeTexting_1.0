@@ -2,156 +2,100 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
-  <title>OrangeTexting Chat History</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>OrangeTexting History</title>
   <style>
     body {
       background-color: #121212;
       color: #fff;
       font-family: Arial, sans-serif;
-      padding: 20px;
       margin: 0;
-      min-height: 100vh;
+      padding: 20px;
       display: flex;
       flex-direction: column;
-    }
-    h2 {
-      margin-bottom: 10px;
-      user-select: none;
-      font-weight: normal;
-      font-size: 1.5rem;
+      height: 100vh;
     }
     #controls {
+      margin-bottom: 10px;
       display: flex;
-      gap: 10px;
-      margin-bottom: 12px;
       flex-wrap: wrap;
+      gap: 10px;
     }
-    #roomInput, #secretInput {
-      flex-grow: 1;
-      padding: 8px;
-      border-radius: 6px;
-      border: 1px solid #555;
-      background-color: #333;
-      color: #fff;
+    #roomInput, #secretInput, #loadBtn {
+      padding: 10px;
       font-size: 1rem;
-      min-width: 120px;
+      border-radius: 5px;
+      border: none;
+      outline: none;
+      color: #121212;
+      flex-grow: 1;
+      max-width: 200px;
     }
     #loadBtn {
-      background-color: #ff6f00;
-      border: none;
-      color: white;
-      padding: 10px 20px;
-      font-size: 1rem;
-      border-radius: 6px;
+      background-color: #333;
+      color: #fff;
+      border: 1px solid #555;
       cursor: pointer;
-      user-select: none;
-      flex-shrink: 0;
+      flex-grow: 0;
+      max-width: 100px;
     }
     #output {
       background-color: #1e1e1e;
       border: 1px solid #333;
-      padding: 12px;
-      border-radius: 8px;
-      overflow-y: auto;
       flex-grow: 1;
-      font-size: 1rem;
-      line-height: 1.3;
-      user-select: text;
+      overflow-y: auto;
+      padding: 10px;
       word-wrap: break-word;
-      white-space: pre-wrap;
-      max-height: 70vh;
+      font-size: 1rem;
+      user-select: text;
     }
-    #output p {
-      margin: 6px 0;
-      word-break: break-word;
+    .message {
+      margin-bottom: 12px;
       white-space: pre-wrap;
     }
-    #output img {
-      max-width: 100%;
+    .message img {
+      max-width: 80%;
+      height: auto;
       border-radius: 6px;
-      margin-top: 6px;
+      margin-top: 5px;
+      display: block;
     }
     @media (max-width: 600px) {
-      #output {
-        font-size: 1.1rem;
-        max-height: 60vh;
+      body {
+        font-size: 14px;
       }
-      #roomInput, #secretInput {
-        font-size: 1.1rem;
+      #controls {
+        flex-direction: column;
+        gap: 5px;
       }
-      #loadBtn {
-        padding: 12px 24px;
-        font-size: 1.1rem;
+      #roomInput, #secretInput, #loadBtn {
+        max-width: 100%;
+        flex-grow: unset;
       }
     }
   </style>
 </head>
 <body>
-  <h2>OrangeTexting Chat History Viewer</h2>
+  <h2>Chat History Viewer</h2>
   <div id="controls">
     <input id="roomInput" placeholder="Enter room name" aria-label="Room name" />
-    <input id="secretInput" placeholder="Enter shared secret" aria-label="Shared secret" type="password" />
+    <input id="secretInput" placeholder="Enter shared secret" aria-label="Shared secret" />
     <button id="loadBtn">Load History</button>
   </div>
-  <div id="output" aria-live="polite" aria-label="Chat history"></div>
+  <div id="output" aria-live="polite" aria-atomic="false"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/crypto-js@4.1.1/crypto-js.js"></script>
   <script>
     const loadBtn = document.getElementById('loadBtn');
-    const output = document.getElementById('output');
     const roomInput = document.getElementById('roomInput');
     const secretInput = document.getElementById('secretInput');
+    const output = document.getElementById('output');
 
-    loadBtn.addEventListener('click', async () => {
-      const room = roomInput.value.trim();
-      const secret = secretInput.value.trim();
-      if (!room || !secret) {
-        alert('Please enter both room name and shared secret.');
-        return;
-      }
-      output.innerHTML = '<p>Loading history...</p>';
+    function addMessage(data) {
+      const { user, text, timestamp, imageData } = data;
+      const timeStr = new Date(timestamp || Date.now()).toLocaleString();
 
-      try {
-        const res = await fetch(`/history/${encodeURIComponent(room)}`);
-        if (!res.ok) throw new Error(`Server returned ${res.status}`);
+      const msgDiv = document.createElement('div');
+      msgDiv.classList.add('message');
 
-        const messages = await res.json();
-        if (!Array.isArray(messages) || messages.length === 0) {
-          output.innerHTML = '<p>No messages found for this room.</p>';
-          return;
-        }
-
-        let html = '';
-        for (const entry of messages) {
-          try {
-            const decrypted = CryptoJS.AES.decrypt(entry.encrypted, secret).toString(CryptoJS.enc.Utf8);
-            const data = JSON.parse(decrypted);
-            const timeStr = new Date(data.timestamp || Date.now()).toLocaleString();
-            html += `<p><strong>${escapeHtml(data.user)} [${timeStr}]:</strong> ${data.text ? escapeHtml(data.text) : ''}`;
-            if (data.image) {
-              html += `<br><img src="${data.image}" alt="Sent image">`;
-            }
-            html += `</p>`;
-          } catch {
-            html += `<p style="color:red;"><i>Could not decrypt message</i></p>`;
-          }
-        }
-        output.innerHTML = html;
-      } catch (e) {
-        output.innerHTML = `<p style="color:red;">Error loading history: ${escapeHtml(e.message)}</p>`;
-      }
-    });
-
-    function escapeHtml(text) {
-      return text.replace(/[&<>"']/g, m => ({
-        '&': '&amp;',
-        '<': '&lt;',
-        '>': '&gt;',
-        '"': '&quot;',
-        "'": '&#39;'
-      })[m]);
-    }
-  </script>
-</body>
-</html>
+     
