@@ -1,45 +1,83 @@
-<script>
-  const SECRET_KEY = "300"; // Replace with your actual encryption key
-
-  function decryptMessage(encrypted) {
-    try {
-      const bytes = CryptoJS.AES.decrypt(encrypted, SECRET_KEY);
-      const originalText = bytes.toString(CryptoJS.enc.Utf8);
-      return originalText || "[decryption error]";
-    } catch (e) {
-      return "[decryption error]";
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Chat History Viewer</title>
+  <style>
+    body {
+      background-color: #121212;
+      color: #ffffff;
+      font-family: Arial, sans-serif;
+      padding: 20px;
     }
-  }
+    h2 { margin-bottom: 10px; }
+    input {
+      padding: 6px;
+      margin-right: 10px;
+      background-color: #222;
+      color: #fff;
+      border: 1px solid #444;
+    }
+    #output {
+      margin-top: 20px;
+      background-color: #1e1e1e;
+      padding: 10px;
+      max-height: 500px;
+      overflow-y: auto;
+      border: 1px solid #333;
+    }
+    #output p {
+      color: #fff;
+      font-size: 16px;
+      line-height: 1.4;
+    }
+  </style>
+  <!-- CryptoJS Library for AES Decryption -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+</head>
+<body>
+  <h2>Chat History Viewer</h2>
+  <input id="roomInput" placeholder="Enter room name" />
+  <button onclick="loadHistory()">Load History</button>
+  <div id="output"></div>
 
-  async function loadHistory() {
-    const room = document.getElementById('roomInput').value.trim();
-    if (!room) return;
+  <script>
+    const SECRET_KEY = "300"; // Replace with your encryption key
 
-    const res = await fetch(`/history/${room}`);
-    if (!res.ok) {
-      document.getElementById('output').innerHTML = `<p>Error loading history.</p>`;
-      return;
+    function decryptMessage(encrypted) {
+      try {
+        const bytes = CryptoJS.AES.decrypt(encrypted, SECRET_KEY);
+        const originalText = bytes.toString(CryptoJS.enc.Utf8);
+        // If decrypt fails or empty, fallback to showing encrypted text
+        return originalText || encrypted || "[decryption error]";
+      } catch (e) {
+        return "[decryption error]";
+      }
     }
 
-    const messages = await res.json();
-    let html = '';
-    for (const msg of messages) {
-      const time = new Date(msg.timestamp).toLocaleString();
+    async function loadHistory() {
+      const room = document.getElementById('roomInput').value.trim();
+      if (!room) return;
 
-      // Check if encrypted message exists and is non-empty
-      let displayedText = "";
-      if (msg.encrypted) {
-        displayedText = decryptMessage(msg.encrypted);
-      } else if (msg.text) {
-        displayedText = msg.text;
-      } else {
-        displayedText = "[no message text]";
+      // Fix: use backticks to make URL string interpolation valid
+      const res = await fetch(`/history/${room}`);
+      if (!res.ok) {
+        // Fix: wrap in backticks for template literals or normal quotes for strings
+        document.getElementById('output').innerHTML = `<p>Error loading history.</p>`;
+        return;
       }
 
-      const user = msg.user || "anon";
-      html += `<p><strong>${user} [${time}]:</strong> ${displayedText}</p>`;
+      const messages = await res.json();
+      let html = '';
+      for (const msg of messages) {
+        const time = new Date(msg.timestamp).toLocaleString();
+        // Decrypt encrypted text if present, fallback to msg.text or show placeholder
+        const encryptedText = msg.encrypted || "";
+        const decryptedText = encryptedText ? decryptMessage(encryptedText) : (msg.text || "[no message]");
+        const user = msg.user || 'anon';
+        html += `<p><strong>${user} [${time}]:</strong> ${decryptedText}</p>`;
+      }
+      document.getElementById('output').innerHTML = html || '<p>No messages yet.</p>';
     }
-    document.getElementById('output').innerHTML = html || '<p>No messages yet.</p>';
-  }
-</script>
-
+  </script>
+</body>
+</html>
