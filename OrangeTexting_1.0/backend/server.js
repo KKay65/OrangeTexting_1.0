@@ -10,48 +10,50 @@ const io = socketIo(server);
 
 const PORT = process.env.PORT || 3000;
 
-// Decode Firebase service account key
+// Decode Firebase service account key from base64 env variable
 const serviceAccountJson = Buffer.from(process.env.FIREBASE_KEY_B64, 'base64').toString('utf-8');
 const serviceAccount = JSON.parse(serviceAccountJson);
 
-// Initialize Firebase
+// Initialize Firebase admin SDK
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount)
 });
+
 const db = admin.firestore();
 
-// Serve static frontend files (chat.html, history.html) from frontend folder
+// Serve frontend files statically from ../frontend directory
 app.use(express.static(path.join(__dirname, '../frontend')));
 
-// REST endpoint for fetching chat history of a room
+// REST API to get chat history for a room
 app.get('/history/:roomId', async (req, res) => {
   try {
+    const roomId = req.params.roomId;
     const snapshot = await db.collection('messages')
-      .doc(req.params.roomId)
+      .doc(roomId)
       .collection('chats')
       .orderBy('timestamp')
       .get();
 
     const messages = [];
-    snapshot.forEach(doc => messages.push(doc.data()));
+    snapshot.forEach(doc => {
+      messages.push(doc.data());
+    });
 
     res.json(messages);
-  } catch (err) {
-    console.error('Failed to fetch messages:', err);
-    res.status(500).json({ error: 'Failed to fetch messages.' });
+  } catch (error) {
+    console.error('Failed to fetch chat history:', error);
+    res.status(500).json({ error: 'Failed to fetch chat history.' });
   }
 });
 
 io.on('connection', socket => {
   let currentRoom = null;
 
-  // Handle joining a chat room
   socket.on('join-room', async ({ roomId }) => {
     currentRoom = roomId;
     socket.join(roomId);
 
     try {
-      // Load previous messages and send them to the client
       const snapshot = await db.collection('messages')
         .doc(roomId)
         .collection('chats')
@@ -61,35 +63,38 @@ io.on('connection', socket => {
       snapshot.forEach(doc => {
         socket.emit('receive-message', doc.data());
       });
-    } catch (err) {
-      console.error('Failed to load chat history:', err);
+    } catch (error) {
+      console.error(`Failed to load chat history for room ${roomId}:`, error);
     }
   });
 
-  // Handle new messages
   socket.on('send-message', async (msgData) => {
     if (!currentRoom) return;
 
     try {
-      // Save message with current timestamp (overwrite msgData.timestamp for consistency)
+      // Overwrite timestamp to ensure consistency server-side
       const savedData = { ...msgData, timestamp: Date.now() };
+
       await db.collection('messages')
         .doc(currentRoom)
         .collection('chats')
         .add(savedData);
 
-      // Broadcast saved message to room clients (use savedData with updated timestamp)
+      // Broadcast saved message with timestamp to all clients in the room
       io.to(currentRoom).emit('receive-message', savedData);
-    } catch (err) {
-      console.error('Error saving message:', err);
+    } catch (error) {
+      console.error('Error saving message:', error);
     }
   });
 
-  // Handle typing indicator
-  socket.on('typing', (data) => {
+  socket.on('typing', data => {
     if (currentRoom) {
       socket.to(currentRoom).emit('typing', data);
     }
+  });
+
+  socket.on('disconnect', () => {
+    currentRoom = null;
   });
 });
 

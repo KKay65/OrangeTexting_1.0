@@ -29,11 +29,10 @@
     }
 
     .message img {
-      width: 100%;
-      max-width: 400px;
-      height: auto;
-      margin-top: 6px;
+      max-width: 100%;
+      max-height: 400px;
       border-radius: 8px;
+      margin-top: 6px;
       display: block;
     }
 
@@ -67,6 +66,7 @@
       #input-area {
         flex-direction: column;
       }
+
       #upload-btn, #send-btn {
         margin-left: 0;
         margin-top: 10px;
@@ -79,7 +79,7 @@
   <div id="chat"></div>
 
   <div id="input-area">
-    <textarea id="input" rows="2" placeholder="Type your message... (Enter to send, Shift+Enter for newline)"></textarea>
+    <textarea id="input" rows="2" placeholder="Enter message... (Enter to send, Shift+Enter for newline)"></textarea>
     <input type="file" id="upload-btn" accept="image/*">
     <button id="send-btn">Send</button>
   </div>
@@ -101,26 +101,40 @@
       const div = document.createElement('div');
       div.className = 'message';
       const time = new Date(timestamp || Date.now()).toLocaleTimeString();
-      div.innerHTML = `<strong>${user} [${time}]:</strong> ${text || ''}`;
+      const header = document.createElement('strong');
+      header.textContent = `${user} [${time}]:`;
+      div.appendChild(header);
+
+      if (text) {
+        const textSpan = document.createElement('span');
+        textSpan.textContent = " " + text;
+        div.appendChild(textSpan);
+      }
+
       if (imageData) {
         const img = document.createElement('img');
         img.src = imageData;
+        img.alt = "uploaded image";
         div.appendChild(img);
       }
+
       chat.appendChild(div);
       chat.scrollTop = chat.scrollHeight;
     }
 
-    socket.on('receive-message', addMessage);
+    socket.on('receive-message', (msg) => {
+      addMessage(msg);
+    });
 
     sendBtn.onclick = () => {
       const text = input.value.trim();
       const file = uploadBtn.files[0];
+
       if (!text && !file) return;
 
       const msg = {
         user: username,
-        text,
+        text: text || null,
         timestamp: Date.now()
       };
 
