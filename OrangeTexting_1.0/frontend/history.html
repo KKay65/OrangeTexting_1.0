@@ -1,86 +1,55 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>OrangeTexting History</title>
   <style>
-    body {
-      background-color: #121212;
-      color: #fff;
-      font-family: Arial;
-      margin: 0;
-      padding: 20px;
-      height: 100vh;
-      display: flex;
-      flex-direction: column;
-    }
-    #controls {
-      margin-bottom: 10px;
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-    }
-    input, button {
-      padding: 10px;
-      font-size: 1rem;
-      border-radius: 5px;
-      border: none;
-    }
-    #output {
-      flex-grow: 1;
-      overflow-y: auto;
-      background: #1e1e1e;
-      border: 1px solid #444;
-      padding: 10px;
-    }
-    .message {
-      margin-bottom: 12px;
-      white-space: pre-wrap;
-    }
-    .message img {
-      max-width: 80%;
-      height: auto;
-      margin-top: 5px;
-      border-radius: 6px;
-      display: block;
-    }
+    body { background: #121212; color: white; font-family: Arial; padding: 20px; }
+    input, button { margin: 5px 5px 10px 0; padding: 10px; border-radius: 4px; border: none; font-size: 1rem; }
+    button { background: #333; color: white; cursor: pointer; }
+    #output { background: #1e1e1e; padding: 10px; border-radius: 4px; max-height: 70vh; overflow-y: auto; }
+    .message { margin-bottom: 12px; white-space: pre-wrap; user-select: text; }
+    .message img { max-width: 90%; height: auto; display: block; margin-top: 6px; border-radius: 8px; }
   </style>
 </head>
 <body>
-  <h2>Chat History</h2>
-  <div id="controls">
-    <input id="roomInput" placeholder="Room name" />
-    <button onclick="loadHistory()">Load</button>
-  </div>
+  <h2>Chat History Viewer</h2>
+  <input id="roomInput" placeholder="Room ID">
+  <button onclick="loadHistory()">Load</button>
   <div id="output"></div>
 
   <script>
     async function loadHistory() {
       const room = document.getElementById('roomInput').value.trim();
-      if (!room) return alert("Enter a room name.");
+      const output = document.getElementById('output');
+      output.innerHTML = '';
 
-      const res = await fetch(`/history/${room}`);
-      const messages = await res.json();
+      if (!room) return;
 
-      const output = document.getElementById("output");
-      output.innerHTML = "";
+      try {
+        const res = await fetch(`/history/${room}`);
+        const messages = await res.json();
 
-      messages.forEach(msg => {
-        const div = document.createElement("div");
-        div.className = "message";
-        const time = new Date(msg.timestamp || Date.now()).toLocaleString();
-        div.innerHTML = `<strong>${msg.user} [${time}]:</strong> ${msg.text || ""}`;
-        if (msg.imageData) {
-          const img = document.createElement("img");
-          img.src = msg.imageData;
-          div.appendChild(img);
+        if (!messages.length) {
+          output.innerHTML = '<p>No messages yet.</p>';
+          return;
         }
-        output.appendChild(div);
-      });
 
-      if (!messages.length) {
-        output.innerHTML = "<p>No messages found.</p>";
+        messages.forEach(({ user, text, timestamp, imageData }) => {
+          const div = document.createElement('div');
+          div.className = 'message';
+          const time = new Date(timestamp || Date.now()).toLocaleString();
+          div.innerHTML = `<strong>${user} [${time}]:</strong> ${text || ''}`;
+          if (imageData) {
+            const img = document.createElement('img');
+            img.src = imageData;
+            div.appendChild(img);
+          }
+          output.appendChild(div);
+        });
+      } catch (err) {
+        output.innerHTML = `<p style="color:red;">Error loading messages</p>`;
       }
     }
   </script>
