@@ -7,18 +7,23 @@ const admin = require('firebase-admin');
 const app = express();
 const server = http.createServer(app);
 const io = socketIo(server);
+
 const PORT = process.env.PORT || 3000;
 
-// Firebase service key setup
+// Decode Firebase service account key from base64 env var
 const serviceAccountJson = Buffer.from(process.env.FIREBASE_KEY_B64, 'base64').toString('utf-8');
 const serviceAccount = JSON.parse(serviceAccountJson);
 
+// Initialize Firebase admin SDK
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount)
 });
 
 const db = admin.firestore();
-app.use('/frontend', express.static(path.join(__dirname, '../frontend')));
+
+// Serve frontend static files
+app.use('/chat', express.static(path.join(__dirname, 'frontend/chat')));
+app.use('/history', express.static(path.join(__dirname, 'frontend/history')));
 
 io.on('connection', (socket) => {
   let currentRoom = null;
@@ -45,7 +50,6 @@ io.on('connection', (socket) => {
 
   socket.on('send-message', async (encrypted) => {
     if (!currentRoom) return;
-
     try {
       await db.collection('messages')
         .doc(currentRoom)
@@ -54,7 +58,6 @@ io.on('connection', (socket) => {
     } catch (err) {
       console.error('Failed to save message:', err);
     }
-
     io.to(currentRoom).emit('receive-message', encrypted);
   });
 
@@ -65,8 +68,10 @@ io.on('connection', (socket) => {
   });
 });
 
+// REST endpoint for raw encrypted chat history JSON
 app.get('/history/:roomId', async (req, res) => {
   const { roomId } = req.params;
+
   try {
     const snapshot = await db.collection('messages')
       .doc(roomId)
@@ -76,6 +81,7 @@ app.get('/history/:roomId', async (req, res) => {
 
     const messages = [];
     snapshot.forEach(doc => messages.push(doc.data()));
+
     res.json(messages);
   } catch (err) {
     console.error('Error fetching history:', err);
@@ -84,5 +90,5 @@ app.get('/history/:roomId', async (req, res) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`Server running at http://localhost:${PORT}`);
+  console.log(`Server listening on port ${PORT}`);
 });

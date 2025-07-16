@@ -1,102 +1,156 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>Chat History</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+  <title>OrangeTexting Chat History</title>
   <style>
     body {
       background-color: #121212;
       color: #fff;
       font-family: Arial, sans-serif;
       padding: 20px;
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
     }
-    input, button {
+    h2 {
+      margin-bottom: 10px;
+      user-select: none;
+      font-weight: normal;
+      font-size: 1.5rem;
+    }
+    #controls {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+    }
+    #roomInput, #secretInput {
+      flex-grow: 1;
+      padding: 8px;
+      border-radius: 6px;
+      border: 1px solid #555;
       background-color: #333;
       color: #fff;
-      border: 1px solid #555;
-      padding: 8px;
-      margin: 10px 0;
-      width: 100%;
-      box-sizing: border-box;
+      font-size: 1rem;
+      min-width: 120px;
+    }
+    #loadBtn {
+      background-color: #ff6f00;
+      border: none;
+      color: white;
+      padding: 10px 20px;
+      font-size: 1rem;
+      border-radius: 6px;
+      cursor: pointer;
+      user-select: none;
+      flex-shrink: 0;
     }
     #output {
       background-color: #1e1e1e;
       border: 1px solid #333;
-      padding: 10px;
-      max-height: 70vh;
+      padding: 12px;
+      border-radius: 8px;
       overflow-y: auto;
-      word-wrap: break-word;
-    }
-    .message {
-      margin: 8px 0;
+      flex-grow: 1;
+      font-size: 1rem;
+      line-height: 1.3;
       user-select: text;
+      word-wrap: break-word;
+      white-space: pre-wrap;
+      max-height: 70vh;
     }
-    .chat-image {
+    #output p {
+      margin: 6px 0;
+      word-break: break-word;
+      white-space: pre-wrap;
+    }
+    #output img {
       max-width: 100%;
-      border: 1px solid #555;
-      border-radius: 4px;
-      margin: 4px 0;
+      border-radius: 6px;
+      margin-top: 6px;
     }
     @media (max-width: 600px) {
       #output {
-        max-height: 50vh;
+        font-size: 1.1rem;
+        max-height: 60vh;
+      }
+      #roomInput, #secretInput {
+        font-size: 1.1rem;
+      }
+      #loadBtn {
+        padding: 12px 24px;
+        font-size: 1.1rem;
       }
     }
   </style>
 </head>
 <body>
-  <h2>🔍 Chat History Viewer</h2>
-  <input id="roomInput" placeholder="Enter room name" />
-  <input id="secretInput" placeholder="Enter shared secret" />
-  <button onclick="loadHistory()">Load</button>
-  <div id="output"></div>
+  <h2>OrangeTexting Chat History Viewer</h2>
+  <div id="controls">
+    <input id="roomInput" placeholder="Enter room name" aria-label="Room name" />
+    <input id="secretInput" placeholder="Enter shared secret" aria-label="Shared secret" type="password" />
+    <button id="loadBtn">Load History</button>
+  </div>
+  <div id="output" aria-live="polite" aria-label="Chat history"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/crypto-js@4.1.1/crypto-js.js"></script>
   <script>
-    async function loadHistory() {
-      const room = document.getElementById('roomInput').value.trim();
-      const secret = document.getElementById('secretInput').value.trim();
-      const output = document.getElementById('output');
-      output.innerHTML = '';
+    const loadBtn = document.getElementById('loadBtn');
+    const output = document.getElementById('output');
+    const roomInput = document.getElementById('roomInput');
+    const secretInput = document.getElementById('secretInput');
 
+    loadBtn.addEventListener('click', async () => {
+      const room = roomInput.value.trim();
+      const secret = secretInput.value.trim();
       if (!room || !secret) {
-        output.innerHTML = "<p>Please enter both room name and secret.</p>";
+        alert('Please enter both room name and shared secret.');
         return;
       }
+      output.innerHTML = '<p>Loading history...</p>';
 
       try {
-        const res = await fetch(`/history/${room}`);
-        const messages = await res.json();
+        const res = await fetch(`/history/${encodeURIComponent(room)}`);
+        if (!res.ok) throw new Error(`Server returned ${res.status}`);
 
+        const messages = await res.json();
+        if (!Array.isArray(messages) || messages.length === 0) {
+          output.innerHTML = '<p>No messages found for this room.</p>';
+          return;
+        }
+
+        let html = '';
         for (const entry of messages) {
           try {
             const decrypted = CryptoJS.AES.decrypt(entry.encrypted, secret).toString(CryptoJS.enc.Utf8);
             const data = JSON.parse(decrypted);
-            const time = new Date(data.timestamp || Date.now()).toLocaleString();
-
-            const div = document.createElement('div');
-            div.className = 'message';
-
-            if (data.type === 'image') {
-              div.innerHTML = `<strong>${data.user} [${time}]:</strong><br><img class="chat-image" src="${data.data}" alt="image" />`;
-            } else {
-              div.innerHTML = `<strong>${data.user} [${time}]:</strong> ${data.text}`;
+            const timeStr = new Date(data.timestamp || Date.now()).toLocaleString();
+            html += `<p><strong>${escapeHtml(data.user)} [${timeStr}]:</strong> ${data.text ? escapeHtml(data.text) : ''}`;
+            if (data.image) {
+              html += `<br><img src="${data.image}" alt="Sent image">`;
             }
-
-            output.appendChild(div);
+            html += `</p>`;
           } catch {
-            const div = document.createElement('div');
-            div.innerHTML = '<p style="color:red;"><i>Could not decrypt a message.</i></p>';
-            output.appendChild(div);
+            html += `<p style="color:red;"><i>Could not decrypt message</i></p>`;
           }
         }
-
-        if (output.innerHTML.trim() === '') {
-          output.innerHTML = '<p>No messages found.</p>';
-        }
-      } catch (err) {
-        console.error(err);
-        output.innerHTML = '<p style="color:red;">Failed to load chat history.</p>';
+        output.innerHTML = html;
+      } catch (e) {
+        output.innerHTML = `<p style="color:red;">Error loading history: ${escapeHtml(e.message)}</p>`;
       }
+    });
+
+    function escapeHtml(text) {
+      return text.replace(/[&<>"']/g, m => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+      })[m]);
     }
   </script>
 </body>
