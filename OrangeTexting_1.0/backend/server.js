@@ -10,26 +10,26 @@ const io = socketIo(server);
 
 const PORT = process.env.PORT || 3000;
 
-// Firebase admin init
 const serviceAccountJson = Buffer.from(process.env.FIREBASE_KEY_B64, 'base64').toString('utf-8');
 const serviceAccount = JSON.parse(serviceAccountJson);
-admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
+
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount)
+});
 
 const db = admin.firestore();
 
-// === STATIC FILES (point to frontend from backend) ===
+// ✅ Serve frontend from one directory up
 app.use(express.static(path.join(__dirname, '../frontend')));
 
-// === ROOT HOMEPAGE ===
 app.get('/', (req, res) => {
   res.send(`
     <h1>OrangeTexting</h1>
-    <p><a href="/chat.html?room=test-room">Go to Chat</a></p>
+    <p><a href="/chat.html?room=test">Go to Chat</a></p>
     <p><a href="/history.html">View History</a></p>
   `);
 });
 
-// === SOCKET.IO ===
 io.on('connection', (socket) => {
   let currentRoom = null;
 
@@ -45,10 +45,11 @@ io.on('connection', (socket) => {
         .get();
 
       snapshot.forEach(doc => {
-        socket.emit('receive-message', doc.data());
+        const data = doc.data();
+        socket.emit('receive-message', data);
       });
     } catch (err) {
-      console.error('Error loading room history:', err);
+      console.error('Failed to load history:', err);
     }
   });
 
@@ -60,11 +61,11 @@ io.on('connection', (socket) => {
         .doc(currentRoom)
         .collection('chats')
         .add({ ...data, timestamp: Date.now() });
-
-      io.to(currentRoom).emit('receive-message', data);
     } catch (err) {
-      console.error('Error saving message:', err);
+      console.error('Failed to save message:', err);
     }
+
+    io.to(currentRoom).emit('receive-message', data);
   });
 
   socket.on('typing', (data) => {
@@ -74,7 +75,6 @@ io.on('connection', (socket) => {
   });
 });
 
-// === HISTORY API ===
 app.get('/history/:roomId', async (req, res) => {
   const { roomId } = req.params;
 
@@ -86,15 +86,17 @@ app.get('/history/:roomId', async (req, res) => {
       .get();
 
     const messages = [];
-    snapshot.forEach(doc => messages.push(doc.data()));
+    snapshot.forEach(doc => {
+      messages.push(doc.data());
+    });
+
     res.json(messages);
   } catch (err) {
-    console.error('Error loading history:', err);
+    console.error('Error fetching history:', err);
     res.status(500).json({ error: 'Failed to load messages' });
   }
 });
 
-// === START SERVER ===
 server.listen(PORT, () => {
-  console.log(`✅ Server running on http://localhost:${PORT}`);
+  console.log(`✅ Server listening on port ${PORT}`);
 });
