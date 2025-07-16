@@ -3,6 +3,7 @@ const path = require('path');
 const http = require('http');
 const socketIo = require('socket.io');
 const admin = require('firebase-admin');
+const bodyParser = require('body-parser');
 
 const app = express();
 const server = http.createServer(app);
@@ -19,14 +20,15 @@ admin.initializeApp({
 
 const db = admin.firestore();
 
-// ✅ Serve frontend from one directory up
-app.use(express.static(path.join(__dirname, '../frontend')));
+app.use(express.static(path.join(__dirname, '..'))); // serve from root of project
+app.use(bodyParser.json({ limit: '10mb' })); // support large image messages
 
+// Home route
 app.get('/', (req, res) => {
   res.send(`
     <h1>OrangeTexting</h1>
-    <p><a href="/chat.html?room=test">Go to Chat</a></p>
-    <p><a href="/history.html">View History</a></p>
+    <p><a href="/chat.html?room=test">Open Chat</a></p>
+    <p><a href="/history.html">View Chat History</a></p>
   `);
 });
 
@@ -45,27 +47,26 @@ io.on('connection', (socket) => {
         .get();
 
       snapshot.forEach(doc => {
-        const data = doc.data();
-        socket.emit('receive-message', data);
+        socket.emit('receive-message', doc.data());
       });
     } catch (err) {
       console.error('Failed to load history:', err);
     }
   });
 
-  socket.on('send-message', async (data) => {
+  socket.on('send-message', async (messageData) => {
     if (!currentRoom) return;
 
     try {
       await db.collection('messages')
         .doc(currentRoom)
         .collection('chats')
-        .add({ ...data, timestamp: Date.now() });
+        .add({ ...messageData, timestamp: Date.now() });
+
+      io.to(currentRoom).emit('receive-message', messageData);
     } catch (err) {
       console.error('Failed to save message:', err);
     }
-
-    io.to(currentRoom).emit('receive-message', data);
   });
 
   socket.on('typing', (data) => {
@@ -86,10 +87,7 @@ app.get('/history/:roomId', async (req, res) => {
       .get();
 
     const messages = [];
-    snapshot.forEach(doc => {
-      messages.push(doc.data());
-    });
-
+    snapshot.forEach(doc => messages.push(doc.data()));
     res.json(messages);
   } catch (err) {
     console.error('Error fetching history:', err);
@@ -98,5 +96,5 @@ app.get('/history/:roomId', async (req, res) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`✅ Server listening on port ${PORT}`);
+  console.log(`Server listening on port ${PORT}`);
 });

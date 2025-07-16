@@ -8,12 +8,12 @@
     body {
       background-color: #121212;
       color: #fff;
-      font-family: Arial, sans-serif;
+      font-family: Arial;
       margin: 0;
       padding: 20px;
+      height: 100vh;
       display: flex;
       flex-direction: column;
-      height: 100vh;
     }
     #controls {
       margin-bottom: 10px;
@@ -21,33 +21,18 @@
       flex-wrap: wrap;
       gap: 10px;
     }
-    #roomInput, #secretInput, #loadBtn {
+    input, button {
       padding: 10px;
       font-size: 1rem;
       border-radius: 5px;
       border: none;
-      outline: none;
-      color: #121212;
-      flex-grow: 1;
-      max-width: 200px;
-    }
-    #loadBtn {
-      background-color: #333;
-      color: #fff;
-      border: 1px solid #555;
-      cursor: pointer;
-      flex-grow: 0;
-      max-width: 100px;
     }
     #output {
-      background-color: #1e1e1e;
-      border: 1px solid #333;
       flex-grow: 1;
       overflow-y: auto;
+      background: #1e1e1e;
+      border: 1px solid #444;
       padding: 10px;
-      word-wrap: break-word;
-      font-size: 1rem;
-      user-select: text;
     }
     .message {
       margin-bottom: 12px;
@@ -56,107 +41,48 @@
     .message img {
       max-width: 80%;
       height: auto;
-      border-radius: 6px;
       margin-top: 5px;
+      border-radius: 6px;
       display: block;
-    }
-    @media (max-width: 600px) {
-      body {
-        font-size: 14px;
-      }
-      #controls {
-        flex-direction: column;
-        gap: 5px;
-      }
-      #roomInput, #secretInput, #loadBtn {
-        max-width: 100%;
-        flex-grow: unset;
-      }
     }
   </style>
 </head>
 <body>
-  <h2>Chat History Viewer</h2>
+  <h2>Chat History</h2>
   <div id="controls">
-    <input id="roomInput" placeholder="Enter room name" aria-label="Room name" />
-    <input id="secretInput" placeholder="Enter shared secret" aria-label="Shared secret" />
-    <button id="loadBtn">Load History</button>
+    <input id="roomInput" placeholder="Room name" />
+    <button onclick="loadHistory()">Load</button>
   </div>
-  <div id="output" aria-live="polite" aria-atomic="false"></div>
+  <div id="output"></div>
 
-  <script src="https://cdn.jsdelivr.net/npm/crypto-js@4.1.1/crypto-js.js"></script>
   <script>
-    const loadBtn = document.getElementById('loadBtn');
-    const roomInput = document.getElementById('roomInput');
-    const secretInput = document.getElementById('secretInput');
-    const output = document.getElementById('output');
-
-    function addMessage(data) {
-      const { user, text, timestamp, imageData } = data;
-      const timeStr = new Date(timestamp || Date.now()).toLocaleString();
-
-      const msgDiv = document.createElement('div');
-      msgDiv.classList.add('message');
-
-      const header = document.createElement('strong');
-      header.textContent = `${user} [${timeStr}]:`;
-      msgDiv.appendChild(header);
-
-      if (text) {
-        const textNode = document.createElement('span');
-        textNode.textContent = " " + text;
-        msgDiv.appendChild(textNode);
-      }
-
-      if (imageData) {
-        const img = document.createElement('img');
-        img.src = imageData;
-        img.alt = "Uploaded image";
-        msgDiv.appendChild(img);
-      }
-
-      output.appendChild(msgDiv);
-    }
-
     async function loadHistory() {
-      output.innerHTML = '';
-      const room = roomInput.value.trim();
-      const secret = secretInput.value.trim();
-      if (!room || !secret) {
-        alert("Please enter both room name and shared secret.");
-        return;
-      }
+      const room = document.getElementById('roomInput').value.trim();
+      if (!room) return alert("Enter a room name.");
 
-      try {
-        const res = await fetch(`/history/${room}`);
-        if (!res.ok) throw new Error("Failed to load history");
+      const res = await fetch(`/history/${room}`);
+      const messages = await res.json();
 
-        const messages = await res.json();
+      const output = document.getElementById("output");
+      output.innerHTML = "";
 
-        if (messages.length === 0) {
-          output.innerHTML = '<p>No messages found.</p>';
-          return;
+      messages.forEach(msg => {
+        const div = document.createElement("div");
+        div.className = "message";
+        const time = new Date(msg.timestamp || Date.now()).toLocaleString();
+        div.innerHTML = `<strong>${msg.user} [${time}]:</strong> ${msg.text || ""}`;
+        if (msg.imageData) {
+          const img = document.createElement("img");
+          img.src = msg.imageData;
+          div.appendChild(img);
         }
+        output.appendChild(div);
+      });
 
-        for (const entry of messages) {
-          // Decrypt each message
-          let decryptedText;
-          try {
-            decryptedText = CryptoJS.AES.decrypt(JSON.stringify(entry), secret).toString(CryptoJS.enc.Utf8);
-            // Actually decrypting JSON string fails, so decrypt each encrypted field if exists
-            // But here, we store raw messages, so no encryption from server side, so skip decryption
-            // Just display data directly:
-            addMessage(entry);
-          } catch {
-            output.innerHTML += '<p style="color:red;"><i>Could not decrypt message</i></p>';
-          }
-        }
-      } catch (err) {
-        output.innerHTML = `<p style="color:red;">Error loading history: ${err.message}</p>`;
+      if (!messages.length) {
+        output.innerHTML = "<p>No messages found.</p>";
       }
     }
-
-    loadBtn.addEventListener('click', loadHistory);
   </script>
 </body>
 </html>
