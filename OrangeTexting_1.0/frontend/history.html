@@ -1,26 +1,25 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Chat History</title>
   <style>
     body {
       background-color: #121212;
-      color: white;
+      color: #ffffff;
       font-family: Arial, sans-serif;
       padding: 20px;
     }
     .message {
-      margin-bottom: 16px;
+      margin-bottom: 20px;
       white-space: pre-wrap;
     }
     .message img {
-      width: 100%;
-      max-width: 400px;
+      max-width: 100%;
       height: auto;
-      margin-top: 6px;
       border-radius: 8px;
+      margin-top: 8px;
     }
   </style>
 </head>
@@ -41,7 +40,6 @@
           if (msg.imageData) {
             const img = document.createElement('img');
             img.src = msg.imageData;
-            img.alt = 'Image';
             div.appendChild(img);
           }
           history.appendChild(div);

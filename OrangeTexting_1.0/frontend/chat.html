@@ -2,15 +2,15 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>OrangeTexting Chat</title>
   <style>
     html, body {
-      margin: 0;
       height: 100%;
+      margin: 0;
+      font-family: Arial, sans-serif;
       background-color: #121212;
       color: white;
-      font-family: Arial, sans-serif;
       display: flex;
       flex-direction: column;
     }
@@ -26,48 +26,43 @@
       user-select: text;
     }
     .message img {
-      width: 100%;
-      max-width: 400px;
+      max-width: 100%;
       height: auto;
       margin-top: 6px;
       border-radius: 8px;
+      display: block;
     }
     #input-area {
       display: flex;
-      flex-direction: column;
+      flex-wrap: wrap;
       padding: 10px;
-      background-color: #222;
+      background: #222;
     }
-    textarea {
-      resize: none;
-      padding: 8px;
-      border-radius: 6px;
-      border: none;
-      margin-bottom: 5px;
-      font-size: 14px;
-    }
-    #send-btn {
+    #input {
+      flex: 1;
       padding: 10px;
-      font-size: 16px;
-      background-color: #ff6f00;
+      background: #333;
       color: white;
-      border: none;
-      border-radius: 6px;
+      border: 1px solid #555;
+      border-radius: 4px;
+      resize: none;
+    }
+    #upload-btn, #send-btn {
+      background: #444;
+      color: white;
+      border: 1px solid #555;
+      padding: 10px;
+      margin-left: 10px;
       cursor: pointer;
     }
-    #send-btn:hover {
-      background-color: #ff8f00;
-    }
-    #upload-btn {
-      margin-bottom: 6px;
-    }
-
     @media (max-width: 600px) {
-      textarea {
-        font-size: 16px;
+      #input-area {
+        flex-direction: column;
       }
-      #send-btn {
-        font-size: 18px;
+      #upload-btn, #send-btn {
+        margin-left: 0;
+        margin-top: 10px;
+        width: 100%;
       }
     }
   </style>
@@ -75,85 +70,71 @@
 <body>
   <div id="chat"></div>
   <div id="input-area">
-    <input type="file" id="upload-btn" accept="image/*" />
-    <textarea id="input" rows="2" placeholder="Type your message..."></textarea>
+    <textarea id="input" rows="2" placeholder="Type your message... (Enter to send, Shift+Enter for newline)"></textarea>
+    <input type="file" id="upload-btn" accept="image/*">
     <button id="send-btn">Send</button>
   </div>
 
   <script src="/socket.io/socket.io.js"></script>
   <script>
     const socket = io();
+    const room = new URLSearchParams(window.location.search).get("room");
+    const username = prompt("Enter your name:") || "Anonymous";
+    socket.emit('join-room', { roomId: room });
+
     const chat = document.getElementById('chat');
     const input = document.getElementById('input');
     const sendBtn = document.getElementById('send-btn');
     const uploadBtn = document.getElementById('upload-btn');
 
-    const username = localStorage.getItem('username') || prompt("Enter your username:");
-    localStorage.setItem('username', username);
-
-    const roomId = new URLSearchParams(window.location.search).get('room') || 'default';
-    socket.emit('join-room', { roomId });
-
-    const suppressEcho = new Set();
-
     function addMessage({ user, text, timestamp, imageData }) {
-      const id = user + '|' + timestamp;
-      if (suppressEcho.has(id)) return;
-
       const div = document.createElement('div');
       div.className = 'message';
-
       const time = new Date(timestamp || Date.now()).toLocaleTimeString();
       div.innerHTML = `<strong>${user} [${time}]:</strong> ${text || ''}`;
-
       if (imageData) {
         const img = document.createElement('img');
         img.src = imageData;
         img.alt = "Image";
         div.appendChild(img);
       }
-
       chat.appendChild(div);
       chat.scrollTop = chat.scrollHeight;
     }
 
-    socket.on('receive-message', msg => {
-      addMessage(msg);
-    });
+    socket.on('receive-message', addMessage);
 
-    sendBtn.onclick = () => {
+    sendBtn.addEventListener('click', () => {
       const text = input.value.trim();
       const file = uploadBtn.files[0];
-
       if (!text && !file) return;
-
-      const timestamp = Date.now();
-      const message = {
-        user: username,
-        text,
-        timestamp
-      };
 
       if (file) {
         const reader = new FileReader();
         reader.onload = () => {
-          message.imageData = reader.result;
+          const imageData = reader.result;
+          const message = {
+            user: username,
+            text,
+            imageData,
+            timestamp: Date.now()
+          };
           socket.emit('send-message', message);
-          suppressEcho.add(username + '|' + timestamp);
-          addMessage(message);
           input.value = '';
           uploadBtn.value = '';
         };
         reader.readAsDataURL(file);
       } else {
+        const message = {
+          user: username,
+          text,
+          timestamp: Date.now()
+        };
         socket.emit('send-message', message);
-        suppressEcho.add(username + '|' + timestamp);
-        addMessage(message);
         input.value = '';
       }
-    };
+    });
 
-    // Send on Enter, newline on Shift+Enter
     input.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
