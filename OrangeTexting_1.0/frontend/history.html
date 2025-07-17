@@ -1,98 +1,52 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>OrangeTexting History</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Chat History</title>
   <style>
-    html, body {
-      height: 100%;
-      margin: 0;
-      font-family: Arial;
-      background: #121212;
+    body {
+      background-color: #121212;
       color: white;
-      display: flex;
-      flex-direction: column;
-    }
-    #controls {
-      padding: 16px;
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-      background: #222;
-    }
-    input, button {
-      padding: 10px;
-      border-radius: 4px;
-      border: none;
-      font-size: 1rem;
-    }
-    button {
-      background: #333;
-      color: white;
-      cursor: pointer;
-    }
-    #output {
-      flex: 1;
-      background: #1e1e1e;
-      padding: 10px;
-      overflow-y: auto;
+      font-family: Arial, sans-serif;
+      padding: 20px;
     }
     .message {
-      margin-bottom: 14px;
+      margin-bottom: 16px;
       white-space: pre-wrap;
-      user-select: text;
     }
     .message img {
-      max-width: 90%;
+      width: 100%;
+      max-width: 400px;
       height: auto;
       margin-top: 6px;
-      display: block;
       border-radius: 8px;
     }
   </style>
 </head>
 <body>
-  <div id="controls">
-    <input id="roomInput" placeholder="Room ID">
-    <button onclick="loadHistory()">Load</button>
-  </div>
-  <div id="output"></div>
+  <h1>Chat History</h1>
+  <div id="history"></div>
 
   <script>
-    async function loadHistory() {
-      const room = document.getElementById("roomInput").value.trim();
-      const output = document.getElementById("output");
-      output.innerHTML = "";
-
-      if (!room) return;
-
-      try {
-        const res = await fetch(`/history/${room}`);
-        const messages = await res.json();
-
-        if (!messages.length) {
-          output.innerHTML = "<p>No messages found.</p>";
-          return;
-        }
-
-        messages.forEach(({ user, text, timestamp, imageData }) => {
-          const div = document.createElement("div");
-          div.className = "message";
-          const time = new Date(timestamp || Date.now()).toLocaleString();
-          div.innerHTML = `<strong>${user} [${time}]:</strong> ${text || ''}`;
-          if (imageData) {
-            const img = document.createElement("img");
-            img.src = imageData;
-            img.alt = "Image";
+    fetch('/history')
+      .then(res => res.json())
+      .then(data => {
+        const history = document.getElementById('history');
+        data.forEach(msg => {
+          const div = document.createElement('div');
+          div.className = 'message';
+          const time = new Date(msg.timestamp).toLocaleTimeString();
+          div.innerHTML = `<strong>${msg.user} [${time}]:</strong> ${msg.text || ''}`;
+          if (msg.imageData) {
+            const img = document.createElement('img');
+            img.src = msg.imageData;
+            img.alt = 'Image';
             div.appendChild(img);
           }
-          output.appendChild(div);
+          history.appendChild(div);
         });
-      } catch (err) {
-        output.innerHTML = `<p style="color:red;">Error loading messages.</p>`;
-      }
-    }
+      });
   </script>
 </body>
 </html>
