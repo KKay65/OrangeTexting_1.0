@@ -87,34 +87,37 @@
     const sendBtn = document.getElementById('send-btn');
     const uploadBtn = document.getElementById('upload-btn');
 
-    function addMessage({ user, text, timestamp, imageData }) {
+    function addMessage({ user = "?", text = "", timestamp = Date.now(), imageData = null }) {
       const div = document.createElement('div');
       div.className = 'message';
+      const time = new Date(timestamp).toLocaleTimeString();
+      const safeText = text ? text.replace(/</g, "&lt;").replace(/>/g, "&gt;") : '';
 
-      const time = new Date(timestamp || Date.now()).toLocaleTimeString();
-
-      const header = document.createElement('div');
-      header.innerHTML = `<strong>${user} [${time}]:</strong>`;
-      div.appendChild(header);
-
-      if (text) {
-        const textNode = document.createElement('div');
-        textNode.textContent = text;
-        div.appendChild(textNode);
-      }
+      div.innerHTML = `<strong>${user} [${time}]:</strong> ${safeText}`;
 
       if (imageData) {
         const img = document.createElement('img');
         img.src = imageData;
         img.alt = "Image";
+        img.onerror = () => {
+          console.error("Failed to load image", imageData);
+        };
         div.appendChild(img);
       }
 
       chat.appendChild(div);
       chat.scrollTop = chat.scrollHeight;
+
+      console.log("Rendered message:", { user, text, timestamp, imageData });
     }
 
-    socket.on('receive-message', addMessage);
+    socket.on('receive-message', (data) => {
+      try {
+        addMessage(data);
+      } catch (err) {
+        console.error("Error rendering message:", data, err);
+      }
+    });
 
     sendBtn.addEventListener('click', () => {
       const text = input.value.trim();
@@ -131,6 +134,7 @@
             imageData,
             timestamp: Date.now()
           };
+          console.log("Sending image message:", message);
           socket.emit('send-message', message);
           input.value = '';
           uploadBtn.value = '';
@@ -142,6 +146,7 @@
           text,
           timestamp: Date.now()
         };
+        console.log("Sending text message:", message);
         socket.emit('send-message', message);
         input.value = '';
       }
