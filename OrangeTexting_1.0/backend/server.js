@@ -1,81 +1,103 @@
 const express = require('express');
-const http = require('http');
-const { Server } = require('socket.io');
 const path = require('path');
-const fs = require('fs');
+const http = require('http');
+const socketIo = require('socket.io');
+const admin = require('firebase-admin');
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server);
+const io = socketIo(server);
 
 const PORT = process.env.PORT || 3000;
-const historyFile = path.join(__dirname, 'history.json');
 
-// Load message history
-let history = [];
-if (fs.existsSync(historyFile)) {
-  try {
-    const data = fs.readFileSync(historyFile, 'utf-8');
-    history = JSON.parse(data);
-  } catch (e) {
-    console.error("Error reading history file:", e);
-  }
-}
+// Decode Firebase service account key
+const serviceAccountJson = Buffer.from(process.env.FIREBASE_KEY_B64, 'base64').toString('utf-8');
+const serviceAccount = JSON.parse(serviceAccountJson);
 
-// Serve frontend
+// Initialize Firebase
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount)
+});
+const db = admin.firestore();
+
+// Serve static frontend files (chat.html, history.html) from frontend folder
 app.use(express.static(path.join(__dirname, '../frontend')));
 
-// Serve chat.html by default
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, '../frontend/chat.html'));
+// REST endpoint to fetch chat history for a room
+app.get('/history/:roomId', async (req, res) => {
+  try {
+    const snapshot = await db.collection('messages')
+      .doc(req.params.roomId)
+      .collection('chats')
+      .orderBy('timestamp')
+      .get();
+
+    const messages = [];
+    snapshot.forEach(doc => messages.push(doc.data()));
+
+    res.json(messages);
+  } catch (err) {
+    console.error('Failed to fetch messages:', err);
+    res.status(500).json({ error: 'Failed to fetch messages.' });
+  }
 });
 
-// Serve history.html
-app.get('/history', (req, res) => {
-  res.sendFile(path.join(__dirname, '../frontend/history.html'));
-});
+io.on('connection', socket => {
+  let currentRoom = null;
 
-io.on('connection', (socket) => {
-  console.log('New client connected');
+  // Handle joining a chat room
+  socket.on('join-room', async ({ roomId }) => {
+    if (!roomId) return;
 
-  socket.on('join-room', ({ roomId }) => {
-    if (roomId) {
-      socket.join(roomId);
-      console.log(`Client joined room: ${roomId}`);
-      // Send existing history
-      history.forEach(msg => {
-        socket.to(roomId).emit('receive-message', msg);
-      });
-    }
-  });
+    currentRoom = roomId;
+    socket.join(roomId);
+    console.log(`Client joined room: ${roomId}`);
 
-  socket.on('send-message', (msg) => {
-    if (!msg || !msg.user || (!msg.text && !msg.imageData)) {
-      return console.warn("Invalid message received:", msg);
-    }
-
-    // Add timestamp server-side if not present
-    msg.timestamp = msg.timestamp || Date.now();
-
-    // Prevent duplicate message IDs by hash (optional)
-    history.push(msg);
-
-    // Save updated history
     try {
-      fs.writeFileSync(historyFile, JSON.stringify(history, null, 2));
-    } catch (err) {
-      console.error("Error saving history:", err);
-    }
+      // Load and send chat history to the joining client only
+      const snapshot = await db.collection('messages')
+        .doc(roomId)
+        .collection('chats')
+        .orderBy('timestamp')
+        .get();
 
-    // Broadcast to all clients
-    io.emit('receive-message', msg);
+      snapshot.forEach(doc => {
+        socket.emit('receive-message', doc.data()); // ✅ send to current client
+      });
+    } catch (err) {
+      console.error('Failed to load chat history:', err);
+    }
   });
 
-  socket.on('disconnect', () => {
-    console.log('Client disconnected');
+  // Handle new message sending
+  socket.on('send-message', async (msgData) => {
+    if (!currentRoom) return;
+
+    try {
+      const savedData = {
+        ...msgData,
+        timestamp: Date.now()
+      };
+
+      await db.collection('messages')
+        .doc(currentRoom)
+        .collection('chats')
+        .add(savedData);
+
+      io.to(currentRoom).emit('receive-message', savedData); // ✅ broadcast to all in room
+    } catch (err) {
+      console.error('Error saving message:', err);
+    }
+  });
+
+  // Handle typing indicator
+  socket.on('typing', (data) => {
+    if (currentRoom) {
+      socket.to(currentRoom).emit('typing', data);
+    }
   });
 });
 
 server.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+  console.log(`Server listening on port ${PORT}`);
 });
