@@ -1,77 +1,66 @@
-// backend/server.js
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
-const path = require('path');
 const fs = require('fs');
-const multer = require('multer');
-const cors = require('cors');
+const path = require('path');
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
-const messages = [];
+const PORT = process.env.PORT || 3000;
+const historyFile = path.join(__dirname, '../frontend/history.json');
 
-const uploadDir = path.join(__dirname, 'uploads');
-if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
+// Ensure history file exists
+if (!fs.existsSync(historyFile)) {
+  fs.writeFileSync(historyFile, '[]');
+}
 
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, uploadDir),
-  filename: (req, file, cb) => cb(null, Date.now() + '-' + file.originalname)
-});
-const upload = multer({ storage });
-
-app.use(cors());
+// Serve frontend static files
 app.use(express.static(path.join(__dirname, '../frontend')));
-app.use('/uploads', express.static(uploadDir));
 
-let userMap = {}; // socket.id -> username
+// Serve chat page by default
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, '../frontend/chat.html'));
+});
+
+// Serve history page
+app.get('/history', (req, res) => {
+  fs.readFile(historyFile, 'utf8', (err, data) => {
+    if (err) return res.status(500).send('Error reading history.');
+    try {
+      res.json(JSON.parse(data));
+    } catch {
+      res.json([]);
+    }
+  });
+});
 
 io.on('connection', (socket) => {
-  console.log('User connected:', socket.id);
+  console.log('New client connected');
 
-  socket.emit('init', messages);
+  socket.on('send-message', (msg) => {
+    if (!msg || !msg.user || (!msg.text && !msg.imageData)) return;
 
-  socket.on('setUsername', (username) => {
-    userMap[socket.id] = username || 'Anonymous';
-  });
+    msg.timestamp = msg.timestamp || Date.now();
 
-  socket.on('chat message', (text) => {
-    const msg = {
-      user: userMap[socket.id] || 'Anonymous',
-      text,
-      type: 'text',
-      timestamp: Date.now()
-    };
-    messages.push(msg);
-    io.emit('chat message', msg);
-  });
+    // Load existing history, append new msg, save last 100
+    fs.readFile(historyFile, 'utf8', (err, data) => {
+      const arr = err ? [] : JSON.parse(data || '[]');
+      arr.push(msg);
+      while (arr.length > 100) arr.shift(); // keep max 100 messages
+      fs.writeFile(historyFile, JSON.stringify(arr, null, 2), () => {});
+    });
 
-  socket.on('image message', (imageUrl) => {
-    const msg = {
-      user: userMap[socket.id] || 'Anonymous',
-      image: imageUrl,
-      type: 'image',
-      timestamp: Date.now()
-    };
-    messages.push(msg);
-    io.emit('image message', msg);
+    // Broadcast message to all clients
+    io.emit('receive-message', msg);
   });
 
   socket.on('disconnect', () => {
-    delete userMap[socket.id];
-    console.log('User disconnected:', socket.id);
+    console.log('Client disconnected');
   });
 });
 
-app.post('/upload', upload.single('image'), (req, res) => {
-  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-  const imageUrl = '/uploads/' + req.file.filename;
-  res.json({ imageUrl });
-});
-
-const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log(`Server running on http://localhost:${PORT}`);
 });
