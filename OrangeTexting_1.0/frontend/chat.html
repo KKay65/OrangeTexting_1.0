@@ -1,72 +1,76 @@
-<html lang="en"><head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>OrangeTexting Chat</title>
-<style>
-  body, html { margin:0; padding:0; height:100%; display:flex; flex-direction:column;
-    background:#121212;color:#fff;font-family:sans-serif; }
-  #chat { flex:1; overflow:auto; padding:10px; background:#1e1e1e; }
-  .msg { margin-bottom:12px; white-space:pre-wrap; }
-  .msg img { max-width:100%; display:block; margin-top:6px; border-radius:6px; }
-  #input-area { display:flex; padding:10px; background:#222; }
-  textarea { flex:1; padding:8px; border-radius:4px; border:none; resize:none; height:50px;
-    background:#333;color:#fff; }
-  button, label { margin-left:8px; padding:8px; border:none; border-radius:4px;
-    background:#444;color:#fff; cursor:pointer; }
-  input[type="file"] { display:none; }
-  @media(max-width:600px){
-    #input-area { flex-direction:column; }
-    button,label { width:100%; margin:5px 0 0; }
-  }
-</style>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>OrangeTexting Chat</title>
+  <style>
+    body, html { margin:0; padding:0; height:100%; display:flex; flex-direction:column;
+      background:#121212; color:#fff; font-family:sans-serif; }
+    #chat { flex:1; overflow:auto; padding:10px; background:#1e1e1e; }
+    .msg { margin-bottom:12px; white-space:pre-wrap; }
+    .msg img { max-width:100%; display:block; margin-top:6px; border-radius:6px; }
+    #input-area { display:flex; padding:10px; background:#222; }
+    textarea { flex:1; padding:8px; border-radius:4px; border:none; resize:none; height:50px;
+      background:#333; color:#fff; }
+    button, label { margin-left:8px; padding:8px; border:none; border-radius:4px;
+      background:#444; color:#fff; cursor:pointer; }
+    input[type="file"] { display:none; }
+    @media(max-width:600px){
+      #input-area { flex-direction:column; }
+      button,label { width:100%; margin:5px 0 0; }
+    }
+  </style>
 </head>
 <body>
-<div id="chat"><div class="msg"><b>hi [12:23:32 PM]:</b> hello..?</div></div>
-<div id="input-area">
-  <textarea id="text"></textarea>
-  <label for="file">📷</label>
-  <input type="file" id="file" accept="image/*">
-  <button id="send">Send</button>
-</div>
-<script src="/socket.io/socket.io.js"></script>
-<script>
-  const socket=io();
-  const chat=document.getElementById('chat'),
-        textIn=document.getElementById('text'),
-        fileIn=document.getElementById('file'),
-        sendBtn=document.getElementById('send');
+  <div id="chat"></div>
+  <div id="input-area">
+    <textarea id="text"></textarea>
+    <label for="file">📷</label>
+    <input type="file" id="file" accept="image/*" />
+    <button id="send">Send</button>
+  </div>
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io();
+    const chat = document.getElementById('chat'),
+          textIn = document.getElementById('text'),
+          fileIn = document.getElementById('file'),
+          sendBtn = document.getElementById('send');
 
-  let user=localStorage.getItem('username')||prompt('Enter name')||'Anon';
-  if(!localStorage.getItem('username'))localStorage.setItem('username',user);
+    let user = prompt('Enter your name') || 'Anon';
 
-  socket.emit('join-room','main-room');
+    socket.emit('join-room', 'main-room');
 
-  function render(msg){
-    const d=document.createElement('div'); d.className='msg';
-    const t=new Date(msg.timestamp).toLocaleTimeString();
-    d.innerHTML=`<b>${msg.user} [${t}]:</b> ${msg.text||''}`;
-    if(msg.imageData){
-      const i=document.createElement('img'); i.src=msg.imageData;
-      d.appendChild(i);
+    function render(msg) {
+      const d = document.createElement('div'); d.className = 'msg';
+      const t = new Date(msg.timestamp).toLocaleTimeString();
+      d.innerHTML = `<b>${msg.user} [${t}]:</b> ${msg.text || ''}`;
+      if (msg.imageData) {
+        const i = document.createElement('img'); i.src = msg.imageData;
+        d.appendChild(i);
+      }
+      chat.appendChild(d);
+      chat.scrollTop = chat.scrollHeight;
     }
-    chat.appendChild(d);
-    chat.scrollTop=chat.scrollHeight;
-  }
 
-  socket.on('receive-message', render);
+    socket.on('receive-message', render);
 
-  sendBtn.onclick=()=>{
-    const txt=textIn.value.trim();
-    if(!txt&&!fileIn.files.length) return;
-    if(fileIn.files.length){
-      const f=fileIn.files[0], r=new FileReader();
-      r.onload=()=>{
-        socket.emit('send-message',{user,text:txt,imageData:r.result});
-        textIn.value=''; fileIn.value='';
-      };
-      r.readAsDataURL(f);
-    } else {
-      socket.emit('send-message',{user,text:txt});
-      textIn.value='';
-    }
-  };
+    sendBtn.onclick = () => {
+      const txt = textIn.value.trim();
+      if (!txt && !fileIn.files.length) return;
+      if (fileIn.files.length) {
+        const f = fileIn.files[0], r = new FileReader();
+        r.onload = () => {
+          socket.emit('send-message', { user, text: txt, imageData: r.result });
+          textIn.value = ''; fileIn.value = '';
+        };
+        r.readAsDataURL(f);
+      } else {
+        socket.emit('send-message', { user, text: txt });
+        textIn.value = '';
+      }
+    };
+  </script>
+</body>
+</html>

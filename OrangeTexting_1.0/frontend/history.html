@@ -1,43 +1,34 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>OrangeTexting History</title>
-<style>
-  body { margin:0;padding:20px;background:#121212;color:#fff;font-family:sans-serif; }
-  input,button{padding:8px;margin:4px;border:none;border-radius:4px;}
-  button{background:#444;color:#fff;cursor:pointer;}
-  #log { margin-top:10px; max-height:80vh; overflow:auto; background:#1e1e1e;
-    padding:10px;border-radius:4px; }
-  .msg{margin-bottom:12px;white-space:pre-wrap;}
-  .msg img{max-width:100%;border-radius:6px;display:block;margin-top:6px;}
-</style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Chat History</title>
+  <style>
+    body { background:#111; color:#fff; font-family:sans-serif; padding:20px; }
+    .msg { margin-bottom:20px; white-space:pre-wrap; }
+    .msg img { max-width:100%; margin-top:10px; border-radius:6px; }
+  </style>
 </head>
 <body>
-<h2>History Viewer</h2>
-<input id="room" placeholder="Room ID" />
-<button onclick="load()">Load</button>
-<div id="log"></div>
-<script>
-  async function load(){
-    const room=document.getElementById('room').value.trim();
-    const log=document.getElementById('log'); log.innerHTML='';
-    if(!room)return alert('Enter room');
-    try{
-      const res=await fetch(`/history/${room}`);
-      const msgs=await res.json();
-      msgs.forEach(m=>{ const d=document.createElement('div');
-        d.className='msg';
-        const t=new Date(m.timestamp).toLocaleString();
-        d.innerHTML=`<b>${m.user} [${t}]:</b> ${m.text||''}`;
-        if(m.imageData){ const img=document.createElement('img');
-          img.src=m.imageData; d.appendChild(img);
-        }
-        log.appendChild(d);
+  <h2>Chat History</h2>
+  <div id="history"></div>
+  <script>
+    fetch('/history')
+      .then(res => res.json())
+      .then(data => {
+        const container = document.getElementById('history');
+        data.forEach(msg => {
+          const d = document.createElement('div'); d.className = 'msg';
+          const t = new Date(msg.timestamp).toLocaleTimeString();
+          d.innerHTML = `<b>${msg.user} [${t}]:</b> ${msg.text || ''}`;
+          if (msg.imageData) {
+            const i = document.createElement('img'); i.src = msg.imageData;
+            d.appendChild(i);
+          }
+          container.appendChild(d);
+        });
       });
-    }catch(e){ log.innerHTML='<p>Error loading.</p>'; }
-  }
-</script>
+  </script>
 </body>
 </html>
