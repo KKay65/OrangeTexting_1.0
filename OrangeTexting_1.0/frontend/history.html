@@ -1,54 +1,43 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>OrangeTexting History</title>
-  <style>
-    body { background: #121212; color: white; font-family: Arial; margin: 0; padding: 20px; }
-    #controls { margin-bottom: 10px; display: flex; gap: 8px; }
-    input, button { padding: 8px; border: none; border-radius: 4px; font-size: 1rem; }
-    button { background: #333; color: white; cursor: pointer; }
-    #output { background: #1e1e1e; padding: 10px; height: calc(100vh - 100px); overflow-y: auto; }
-    .message { margin-bottom: 14px; white-space: pre-wrap; user-select: text; }
-    .message img { max-width: 100%; height: auto; margin-top: 6px; border-radius: 8px; display: block; }
-    @media(max-width:600px){body{padding:10px}#controls{flex-direction:column}}
-  </style>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>OrangeTexting History</title>
+<style>
+  body { margin:0;padding:20px;background:#121212;color:#fff;font-family:sans-serif; }
+  input,button{padding:8px;margin:4px;border:none;border-radius:4px;}
+  button{background:#444;color:#fff;cursor:pointer;}
+  #log { margin-top:10px; max-height:80vh; overflow:auto; background:#1e1e1e;
+    padding:10px;border-radius:4px; }
+  .msg{margin-bottom:12px;white-space:pre-wrap;}
+  .msg img{max-width:100%;border-radius:6px;display:block;margin-top:6px;}
+</style>
 </head>
 <body>
-  <h2>Chat History</h2>
-  <div id="controls">
-    <input id="roomInput" placeholder="Room ID">
-    <button onclick="loadHistory()">Load</button>
-  </div>
-  <div id="output"></div>
-
-  <script>
-    async function loadHistory() {
-      const room = document.getElementById('roomInput').value.trim();
-      const out = document.getElementById('output');
-      out.innerHTML = '';
-      if (!room) return;
-      try {
-        const res = await fetch(`/history/${room}`);
-        const msgs = await res.json();
-        if (msgs.length === 0) { out.innerHTML = '<p>No messages yet</p>'; return; }
-        msgs.forEach(({user, text, timestamp, imageData}) => {
-          const div = document.createElement('div');
-          div.className = 'message';
-          const time = new Date(timestamp).toLocaleString();
-          div.innerHTML = `<strong>${user} [${time}]:</strong> ${text || ''}`;
-          if (imageData) {
-            const img = document.createElement('img');
-            img.src = imageData;
-            img.alt = 'Image';
-            div.appendChild(img);
-          }
-          out.appendChild(div);
-        });
-      } catch {
-        out.innerHTML = '<p style="color:red">Failed to load history</p>';
-      }
-    }
-  </script>
+<h2>History Viewer</h2>
+<input id="room" placeholder="Room ID" />
+<button onclick="load()">Load</button>
+<div id="log"></div>
+<script>
+  async function load(){
+    const room=document.getElementById('room').value.trim();
+    const log=document.getElementById('log'); log.innerHTML='';
+    if(!room)return alert('Enter room');
+    try{
+      const res=await fetch(`/history/${room}`);
+      const msgs=await res.json();
+      msgs.forEach(m=>{ const d=document.createElement('div');
+        d.className='msg';
+        const t=new Date(m.timestamp).toLocaleString();
+        d.innerHTML=`<b>${m.user} [${t}]:</b> ${m.text||''}`;
+        if(m.imageData){ const img=document.createElement('img');
+          img.src=m.imageData; d.appendChild(img);
+        }
+        log.appendChild(d);
+      });
+    }catch(e){ log.innerHTML='<p>Error loading.</p>'; }
+  }
+</script>
 </body>
 </html>

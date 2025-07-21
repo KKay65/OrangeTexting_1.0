@@ -1,147 +1,83 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>OrangeTexting Chat</title>
-  <style>
-    html, body {
-      height: 100%;
-      margin: 0;
-      font-family: Arial, sans-serif;
-      background-color: #121212;
-      color: white;
-      display: flex;
-      flex-direction: column;
-    }
-    #chat {
-      flex: 1;
-      overflow-y: auto;
-      padding: 10px;
-      background-color: #1e1e1e;
-    }
-    .message {
-      margin-bottom: 14px;
-      white-space: pre-wrap;
-      user-select: text;
-    }
-    .message img {
-      max-width: 100%;
-      height: auto;
-      margin-top: 6px;
-      border-radius: 8px;
-      display: block;
-    }
-    #input-area {
-      display: flex;
-      flex-wrap: wrap;
-      padding: 10px;
-      background: #222;
-    }
-    #input {
-      flex: 1;
-      padding: 10px;
-      background: #333;
-      color: white;
-      border: 1px solid #555;
-      border-radius: 4px;
-      resize: none;
-      min-height: 40px;
-    }
-    #upload-btn, #send-btn {
-      background: #444;
-      color: white;
-      border: 1px solid #555;
-      padding: 10px;
-      margin-left: 10px;
-      cursor: pointer;
-    }
-    input[type="file"] {
-      display: none;
-    }
-    @media (max-width: 600px) {
-      #input-area {
-        flex-direction: column;
-      }
-      #upload-btn, #send-btn {
-        margin-left: 0;
-        margin-top: 10px;
-        width: 100%;
-      }
-    }
-  </style>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>OrangeTexting Chat</title>
+<style>
+  body, html { margin:0; padding:0; height:100%; display:flex; flex-direction:column;
+    background:#121212;color:#fff;font-family:sans-serif; }
+  #chat { flex:1; overflow:auto; padding:10px; background:#1e1e1e; }
+  .msg { margin-bottom:12px; white-space:pre-wrap; }
+  .msg img { max-width:100%; display:block; margin-top:6px; border-radius:6px; }
+  #input-area { display:flex; padding:10px; background:#222; }
+  textarea { flex:1; padding:8px; border-radius:4px; border:none; resize:none; height:50px;
+    background:#333;color:#fff; }
+  button, label { margin-left:8px; padding:8px; border:none; border-radius:4px;
+    background:#444;color:#fff; cursor:pointer; }
+  input[type="file"] { display:none; }
+  @media(max-width:600px){
+    #input-area { flex-direction:column; }
+    button,label { width:100%; margin:5px 0 0; }
+  }
+</style>
 </head>
 <body>
-  <div id="chat"></div>
+<div id="chat"></div>
+<div id="input-area">
+  <textarea id="text"></textarea>
+  <label for="file">📷</label>
+  <input type="file" id="file" accept="image/*"/>
+  <button id="send">Send</button>
+</div>
+<script src="/socket.io/socket.io.js"></script>
+<script>
+  const socket=io();
+  const chat=document.getElementById('chat'),
+        textIn=document.getElementById('text'),
+        fileIn=document.getElementById('file'),
+        sendBtn=document.getElementById('send');
 
-  <div id="input-area">
-    <textarea id="input" placeholder="Type your message..."></textarea>
-    <label for="file-input" id="upload-btn">📷</label>
-    <input type="file" id="file-input" accept="image/*" />
-    <button id="send-btn">Send</button>
-  </div>
+  let user=localStorage.getItem('username')||prompt('Enter name')||'Anon';
+  if(!localStorage.getItem('username'))localStorage.setItem('username',user);
 
-  <script src="/socket.io/socket.io.js"></script>
-  <script>
-    const socket = io();
-    const chat = document.getElementById('chat');
-    const textInput = document.getElementById('input');
-    const sendBtn = document.getElementById('send-btn');
-    const fileInput = document.getElementById('file-input');
+  socket.emit('join-room','main-room');
 
-    let user = localStorage.getItem('username') || prompt("Enter your username:");
-    if (!user) user = "Anonymous";
-    localStorage.setItem('username', user);
-
-    socket.emit('join-room', 'main');
-
-    function appendMessage({ user, text, imageData, timestamp }) {
-      const div = document.createElement('div');
-      div.className = 'message';
-      const time = new Date(timestamp).toLocaleTimeString();
-      div.innerHTML = `<strong>${user} [${time}]:</strong> ${text || ''}`;
-      if (imageData) {
-        const img = document.createElement('img');
-        img.src = imageData;
-        div.appendChild(img);
-      }
-      chat.appendChild(div);
-      chat.scrollTop = chat.scrollHeight;
+  function render(msg){
+    const d=document.createElement('div'); d.className='msg';
+    const t=new Date(msg.timestamp).toLocaleTimeString();
+    d.innerHTML=`<b>${msg.user} [${t}]:</b> ${msg.text||''}`;
+    if(msg.imageData){
+      const i=document.createElement('img'); i.src=msg.imageData;
+      d.appendChild(i);
     }
+    chat.appendChild(d);
+    chat.scrollTop=chat.scrollHeight;
+  }
 
-    sendBtn.addEventListener('click', () => {
-      const text = textInput.value.trim();
-      if (!text) return;
-      const message = {
-        user,
-        text,
-        imageData: null
+  socket.on('receive-message', render);
+
+  sendBtn.onclick=()=>{
+    const txt=textIn.value.trim();
+    if(!txt&&!fileIn.files.length) return;
+    if(fileIn.files.length){
+      const f=fileIn.files[0], r=new FileReader();
+      r.onload=()=>{
+        socket.emit('send-message',{user,text:txt,imageData:r.result});
+        textIn.value=''; fileIn.value='';
       };
-      socket.emit('send-message', message);
-      textInput.value = '';
-    });
+      r.readAsDataURL(f);
+    } else {
+      socket.emit('send-message',{user,text:txt});
+      textIn.value='';
+    }
+  };
 
-    fileInput.addEventListener('change', () => {
-      const file = fileInput.files[0];
-      if (!file) return;
-      const reader = new FileReader();
-      let triggered = false;
-      reader.onload = function () {
-        if (triggered) return;
-        triggered = true;
-        const imageData = reader.result;
-        const message = {
-          user,
-          text: '',
-          imageData
-        };
-        socket.emit('send-message', message);
-        fileInput.value = '';
-      };
-      reader.readAsDataURL(file);
-    });
-
-    socket.on('receive-message', appendMessage);
-  </script>
+  textIn.addEventListener('keydown',e=>{
+    if(e.key==='Enter'&&!e.shiftKey){
+      e.preventDefault(); sendBtn.click();
+    }
+  });
+</script>
 </body>
 </html>
