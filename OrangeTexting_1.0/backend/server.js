@@ -1,67 +1,77 @@
+// backend/server.js
 const express = require('express');
 const http = require('http');
-const path = require('path');
-const multer = require('multer');
-const fs = require('fs');
 const { Server } = require('socket.io');
+const path = require('path');
+const fs = require('fs');
+const multer = require('multer');
+const cors = require('cors');
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
-const PORT = process.env.PORT || 3000;
+const messages = [];
 
-// --- STATIC SETUP ---
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-app.use(express.static(path.join(__dirname, '../frontend')));
+const uploadDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
 
-// --- IMAGE UPLOAD HANDLING ---
 const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    const dir = path.join(__dirname, 'uploads');
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir);
-    cb(null, dir);
-  },
-  filename: function (req, file, cb) {
-    const ext = path.extname(file.originalname);
-    const filename = Date.now() + ext;
-    cb(null, filename);
-  }
+  destination: (req, file, cb) => cb(null, uploadDir),
+  filename: (req, file, cb) => cb(null, Date.now() + '-' + file.originalname)
 });
-
 const upload = multer({ storage });
 
-app.post('/upload', upload.single('image'), (req, res) => {
-  if (!req.file) return res.status(400).send('No file uploaded');
-  const imageUrl = `/uploads/${req.file.filename}`;
-  res.json({ imageUrl });
-});
+app.use(cors());
+app.use(express.static(path.join(__dirname, '../frontend')));
+app.use('/uploads', express.static(uploadDir));
 
-// --- SOCKET HANDLING ---
-let messageHistory = [];
+let userMap = {}; // socket.id -> username
 
 io.on('connection', (socket) => {
-  console.log('User connected');
+  console.log('User connected:', socket.id);
 
-  // Send history on connect
-  socket.emit('load history', messageHistory);
+  socket.emit('init', messages);
 
-  socket.on('chat message', (msg) => {
-    messageHistory.push(msg);
+  socket.on('setUsername', (username) => {
+    userMap[socket.id] = username || 'Anonymous';
+  });
+
+  socket.on('chat message', (text) => {
+    const msg = {
+      user: userMap[socket.id] || 'Anonymous',
+      text,
+      type: 'text',
+      timestamp: Date.now()
+    };
+    messages.push(msg);
     io.emit('chat message', msg);
   });
 
+  socket.on('image message', (imageUrl) => {
+    const msg = {
+      user: userMap[socket.id] || 'Anonymous',
+      image: imageUrl,
+      type: 'image',
+      timestamp: Date.now()
+    };
+    messages.push(msg);
+    io.emit('image message', msg);
+  });
+
   socket.on('disconnect', () => {
-    console.log('User disconnected');
+    delete userMap[socket.id];
+    console.log('User disconnected:', socket.id);
   });
 });
 
-// --- ROOT TEST ---
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, '../frontend/chat.html'));
+app.post('/upload', upload.single('image'), (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+  const imageUrl = '/uploads/' + req.file.filename;
+  res.json({ imageUrl });
 });
 
-// --- START SERVER ---
+const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
