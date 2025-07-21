@@ -1,106 +1,51 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>OrangeTexting Chat</title>
+  <meta charset="utf-8">
+  <title>OrangeTexting</title>
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      background: #121212;
-      color: white;
-      margin: 0;
-      padding: 0;
-      display: flex;
-      flex-direction: column;
-      height: 100vh;
-    }
-    #messages {
-      flex-grow: 1;
-      padding: 10px;
-      overflow-y: scroll;
-      background: #1e1e1e;
-    }
-    #message-form {
-      display: flex;
-      padding: 10px;
-      background: #2c2c2c;
-    }
-    #message-input {
-      flex-grow: 1;
-      padding: 10px;
-      border: none;
-      border-radius: 4px;
-      margin-right: 10px;
-    }
-    #image-input {
-      margin-right: 10px;
-    }
-    button {
-      padding: 10px 15px;
-      background-color: #ff6f00;
-      color: white;
-      border: none;
-      border-radius: 4px;
-      cursor: pointer;
-    }
-    img {
-      max-width: 200px;
-      max-height: 200px;
-      display: block;
-      margin-top: 5px;
-    }
-    .message {
-      margin-bottom: 10px;
-    }
-    .message strong {
-      color: #ff9800;
+    body { background: #121212; color: #fff; font-family: sans-serif; padding: 10px; }
+    #messages { list-style: none; padding: 0; max-height: 70vh; overflow-y: scroll; }
+    #messages li { padding: 5px 10px; border-bottom: 1px solid #444; }
+    #form { display: flex; margin-top: 10px; }
+    #input { flex: 1; padding: 10px; font-size: 16px; }
+    #sendBtn { padding: 10px 20px; }
+    .image-msg { max-width: 200px; max-height: 200px; margin-top: 10px; border-radius: 10px; }
+    #imageInput { margin-left: 10px; }
+    @media (max-width: 600px) {
+      #input { font-size: 14px; }
+      #sendBtn { padding: 8px; }
     }
   </style>
 </head>
 <body>
-  <div id="messages"></div>
-  <form id="message-form">
-    <input id="message-input" autocomplete="off" placeholder="Type your message..." />
-    <input type="file" id="image-input" accept="image/*" />
-    <button type="submit">Send</button>
+  <h2>OrangeTexting</h2>
+  <ul id="messages"></ul>
+  <form id="form">
+    <input id="input" autocomplete="off" placeholder="Type a message..."><button id="sendBtn">Send</button>
+    <input type="file" id="imageInput" accept="image/*">
   </form>
 
-  <script src="/socket.io/socket.io.js"></script>
+  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
   <script>
+    const room = prompt("Enter room name:") || "default";
     const username = prompt("Enter your username:") || "Anonymous";
-    const room = prompt("Enter room name to join or create:") || "main";
 
-    const socket = io();
-    socket.emit('joinRoom', { username, room });
+    const socket = io({ query: { room, username } });
 
-    const form = document.getElementById('message-form');
-    const input = document.getElementById('message-input');
+    const form = document.getElementById('form');
+    const input = document.getElementById('input');
     const messages = document.getElementById('messages');
-    const imageInput = document.getElementById('image-input');
+    const imageInput = document.getElementById('imageInput');
 
-    function addMessage(msg) {
-      const item = document.createElement('div');
-      item.className = 'message';
+    socket.on('init', msgs => msgs.forEach(renderMessage));
+    socket.on('chat message', renderMessage);
+    socket.on('image message', renderMessage);
 
-      if (msg.type === 'text') {
-        item.innerHTML = `<strong>${msg.user}</strong>: ${msg.text}`;
-      } else if (msg.type === 'image') {
-        item.innerHTML = `<strong>${msg.user}</strong>:<br><img src="${msg.image}" alt="Image" />`;
-      }
-
-      messages.appendChild(item);
-      messages.scrollTop = messages.scrollHeight;
-    }
-
-    socket.on('chat message', (msg) => addMessage(msg));
-    socket.on('image message', (msg) => addMessage(msg));
-    socket.on('init', (history) => {
-      history.forEach(addMessage);
-    });
-
-    form.addEventListener('submit', (e) => {
+    form.addEventListener('submit', e => {
       e.preventDefault();
-      if (input.value) {
-        socket.emit('chat message', input.value);
+      if (input.value.trim()) {
+        socket.emit('chat message', input.value.trim());
         input.value = '';
       }
     });
@@ -108,13 +53,36 @@
     imageInput.addEventListener('change', () => {
       const file = imageInput.files[0];
       if (!file) return;
+      const formData = new FormData();
+      formData.append('image', file);
+      formData.append('room', room);
 
-      const reader = new FileReader();
-      reader.onload = function(e) {
-        socket.emit('image message', e.target.result);
-      };
-      reader.readAsDataURL(file);
+      fetch('/upload', {
+        method: 'POST',
+        body: formData
+      })
+      .then(res => res.json())
+      .then(data => {
+        socket.emit('image message', data.imageUrl);
+      })
+      .catch(err => console.error('Upload failed', err));
     });
+
+    function renderMessage(msg) {
+      const item = document.createElement('li');
+      const time = new Date(msg.timestamp).toLocaleTimeString();
+      item.innerHTML = `<strong>${msg.user}</strong> [${time}]: `;
+      if (msg.type === 'text') {
+        item.innerHTML += msg.text;
+      } else if (msg.type === 'image') {
+        const img = document.createElement('img');
+        img.src = msg.image;
+        img.className = "image-msg";
+        item.appendChild(img);
+      }
+      messages.appendChild(item);
+      messages.scrollTop = messages.scrollHeight;
+    }
   </script>
 </body>
 </html>
