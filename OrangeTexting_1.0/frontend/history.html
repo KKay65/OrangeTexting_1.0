@@ -2,31 +2,45 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Chat History</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Chat History Viewer</title>
   <style>
-    body { background:#111; color:#fff; font-family:sans-serif; padding:20px; }
-    .msg { margin-bottom:20px; white-space:pre-wrap; }
-    .msg img { max-width:100%; margin-top:10px; border-radius:6px; }
+    body {
+      background-color: #121212;
+      color: #ffffff;
+      font-family: Arial, sans-serif;
+      padding: 20px;
+    }
+    .message {
+      margin-bottom: 16px;
+    }
+    .message img {
+      max-width: 100%;
+      margin-top: 5px;
+      border-radius: 6px;
+    }
   </style>
 </head>
 <body>
-  <h2>Chat History</h2>
+  <h1>Chat History</h1>
   <div id="history"></div>
+
   <script>
-    fetch('/history')
+    fetch("/history")
       .then(res => res.json())
-      .then(data => {
-        const container = document.getElementById('history');
-        data.forEach(msg => {
-          const d = document.createElement('div'); d.className = 'msg';
+      .then(messages => {
+        const container = document.getElementById("history");
+        messages.forEach(msg => {
+          const div = document.createElement("div");
+          div.className = "message";
           const t = new Date(msg.timestamp).toLocaleTimeString();
-          d.innerHTML = `<b>${msg.user} [${t}]:</b> ${msg.text || ''}`;
+          div.innerHTML = `<b>${msg.user} [${t}]:</b> ${msg.text || ""}`;
           if (msg.imageData) {
-            const i = document.createElement('img'); i.src = msg.imageData;
-            d.appendChild(i);
+            const img = document.createElement("img");
+            img.src = msg.imageData;
+            div.appendChild(img);
           }
-          container.appendChild(d);
+          container.appendChild(div);
         });
       });
   </script>
