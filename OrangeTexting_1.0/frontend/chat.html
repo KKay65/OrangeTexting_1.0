@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>OrangeTexting Chat</title>
   <style>
     html, body {
@@ -23,7 +23,6 @@
     .message {
       margin-bottom: 14px;
       white-space: pre-wrap;
-      word-break: break-word;
       user-select: text;
     }
     .message img {
@@ -40,112 +39,109 @@
       background: #222;
     }
     #input {
-      flex: 1 1 100%;
+      flex: 1;
       padding: 10px;
       background: #333;
       color: white;
       border: 1px solid #555;
       border-radius: 4px;
       resize: none;
-      margin-bottom: 8px;
+      min-height: 40px;
     }
     #upload-btn, #send-btn {
       background: #444;
       color: white;
       border: 1px solid #555;
       padding: 10px;
-      margin-right: 10px;
+      margin-left: 10px;
       cursor: pointer;
     }
-    #send-btn {
-      flex: 1;
+    input[type="file"] {
+      display: none;
     }
     @media (max-width: 600px) {
+      #input-area {
+        flex-direction: column;
+      }
       #upload-btn, #send-btn {
+        margin-left: 0;
+        margin-top: 10px;
         width: 100%;
-        margin: 4px 0;
       }
     }
   </style>
 </head>
 <body>
   <div id="chat"></div>
+
   <div id="input-area">
-    <textarea id="input" rows="2" placeholder="Type your message... (Enter to send, Shift+Enter for newline)"></textarea>
-    <input type="file" id="upload-btn" accept="image/*">
+    <textarea id="input" placeholder="Type your message..."></textarea>
+    <label for="file-input" id="upload-btn">📷</label>
+    <input type="file" id="file-input" accept="image/*" />
     <button id="send-btn">Send</button>
   </div>
 
   <script src="/socket.io/socket.io.js"></script>
   <script>
     const socket = io();
-    const room = new URLSearchParams(window.location.search).get("room") || "main";
-    const username = localStorage.getItem("username") || prompt("Enter your name:") || "Anonymous";
-    localStorage.setItem("username", username);
-    socket.emit('join-room', { roomId: room });
-
     const chat = document.getElementById('chat');
-    const input = document.getElementById('input');
+    const textInput = document.getElementById('input');
     const sendBtn = document.getElementById('send-btn');
-    const uploadBtn = document.getElementById('upload-btn');
+    const fileInput = document.getElementById('file-input');
 
-    function addMessage({ user, text, timestamp, imageData }) {
+    let user = localStorage.getItem('username') || prompt("Enter your username:");
+    if (!user) user = "Anonymous";
+    localStorage.setItem('username', user);
+
+    socket.emit('join-room', 'main');
+
+    function appendMessage({ user, text, imageData, timestamp }) {
       const div = document.createElement('div');
       div.className = 'message';
-      const time = new Date(timestamp || Date.now()).toLocaleTimeString();
+      const time = new Date(timestamp).toLocaleTimeString();
       div.innerHTML = `<strong>${user} [${time}]:</strong> ${text || ''}`;
       if (imageData) {
         const img = document.createElement('img');
         img.src = imageData;
-        img.alt = "Image";
         div.appendChild(img);
       }
       chat.appendChild(div);
       chat.scrollTop = chat.scrollHeight;
     }
 
-    socket.on('receive-message', addMessage);
-
     sendBtn.addEventListener('click', () => {
-      const text = input.value.trim();
-      const file = uploadBtn.files[0];
+      const text = textInput.value.trim();
+      if (!text) return;
+      const message = {
+        user,
+        text,
+        imageData: null
+      };
+      socket.emit('send-message', message);
+      textInput.value = '';
+    });
 
-      if (!text && !file) return;
-
-      if (file) {
-        const reader = new FileReader();
-        reader.onload = () => {
-          const imageData = reader.result;
-          const message = {
-            user: username,
-            text,
-            imageData,
-            timestamp: Date.now()
-          };
-          socket.emit('send-message', message);
-          addMessage(message);  // show instantly
-          input.value = '';
-          uploadBtn.value = null;
-        };
-        reader.readAsDataURL(file);
-      } else {
+    fileInput.addEventListener('change', () => {
+      const file = fileInput.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      let triggered = false;
+      reader.onload = function () {
+        if (triggered) return;
+        triggered = true;
+        const imageData = reader.result;
         const message = {
-          user: username,
-          text,
-          timestamp: Date.now()
+          user,
+          text: '',
+          imageData
         };
         socket.emit('send-message', message);
-        addMessage(message);  // show instantly
-        input.value = '';
-      }
+        fileInput.value = '';
+      };
+      reader.readAsDataURL(file);
     });
 
-    input.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        sendBtn.click();
-      }
-    });
+    socket.on('receive-message', appendMessage);
   </script>
 </body>
 </html>
