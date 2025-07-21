@@ -1,8 +1,6 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<html lang="en"><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <title>OrangeTexting Chat</title>
 <style>
   body, html { margin:0; padding:0; height:100%; display:flex; flex-direction:column;
@@ -23,11 +21,11 @@
 </style>
 </head>
 <body>
-<div id="chat"></div>
+<div id="chat"><div class="msg"><b>hi [12:23:32 PM]:</b> hello..?</div></div>
 <div id="input-area">
   <textarea id="text"></textarea>
   <label for="file">📷</label>
-  <input type="file" id="file" accept="image/*"/>
+  <input type="file" id="file" accept="image/*">
   <button id="send">Send</button>
 </div>
 <script src="/socket.io/socket.io.js"></script>
@@ -72,12 +70,3 @@
       textIn.value='';
     }
   };
-
-  textIn.addEventListener('keydown',e=>{
-    if(e.key==='Enter'&&!e.shiftKey){
-      e.preventDefault(); sendBtn.click();
-    }
-  });
-</script>
-</body>
-</html>
