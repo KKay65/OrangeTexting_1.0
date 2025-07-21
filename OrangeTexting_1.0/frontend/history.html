@@ -1,43 +1,32 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Chat History Viewer</title>
+  <meta charset="utf-8">
+  <title>Chat History</title>
   <style>
-    body {
-      background-color: #121212;
-      color: #ffffff;
-      font-family: Arial, sans-serif;
-      padding: 20px;
-    }
-    .message {
-      margin-bottom: 16px;
-    }
-    .message img {
-      max-width: 100%;
-      margin-top: 5px;
-      border-radius: 6px;
-    }
+    body { background-color: #111; color: #fff; font-family: sans-serif; padding: 20px; }
+    .msg { margin-bottom: 15px; }
+    img { max-width: 200px; display: block; margin-top: 5px; border-radius: 8px; }
   </style>
 </head>
 <body>
-  <h1>Chat History</h1>
+  <h2>Chat History</h2>
   <div id="history"></div>
-
   <script>
-    fetch("/history")
+    fetch('/history')
       .then(res => res.json())
-      .then(messages => {
-        const container = document.getElementById("history");
-        messages.forEach(msg => {
-          const div = document.createElement("div");
-          div.className = "message";
-          const t = new Date(msg.timestamp).toLocaleTimeString();
-          div.innerHTML = `<b>${msg.user} [${t}]:</b> ${msg.text || ""}`;
-          if (msg.imageData) {
-            const img = document.createElement("img");
-            img.src = msg.imageData;
+      .then(data => {
+        const container = document.getElementById('history');
+        data.forEach(msg => {
+          const div = document.createElement('div');
+          div.className = "msg";
+          const time = new Date(msg.timestamp).toLocaleString();
+          div.innerHTML = `<strong>${msg.user}</strong> [${time}]: `;
+          if (msg.type === 'text') {
+            div.innerHTML += msg.text;
+          } else if (msg.type === 'image') {
+            const img = document.createElement('img');
+            img.src = msg.image;
             div.appendChild(img);
           }
           container.appendChild(div);

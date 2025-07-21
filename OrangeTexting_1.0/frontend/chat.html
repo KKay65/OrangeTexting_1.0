@@ -1,120 +1,93 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>OrangeTexting Chat</title>
+  <meta charset="utf-8">
+  <title>OrangeTexting</title>
   <style>
-    body, html {
-      margin: 0; padding: 0; height: 100%;
-      display: flex; flex-direction: column;
-      font-family: Arial, sans-serif;
-      background-color: #121212; color: #fff;
-    }
-    #chat {
-      flex: 1; overflow-y: auto; padding: 10px;
-      background-color: #1e1e1e;
-    }
-    .msg {
-      margin-bottom: 12px; white-space: pre-wrap;
-    }
-    .msg img {
-      max-width: 100%; display: block;
-      margin-top: 6px; border-radius: 6px;
-    }
-    #input-area {
-      display: flex; padding: 10px;
-      background-color: #222;
-    }
-    textarea {
-      flex: 1; padding: 8px;
-      border-radius: 4px; border: none;
-      resize: none; height: 50px;
-      background-color: #333; color: #fff;
-    }
-    button, label {
-      margin-left: 8px; padding: 8px;
-      border: none; border-radius: 4px;
-      background-color: #444; color: #fff;
-      cursor: pointer;
-    }
-    input[type="file"] {
-      display: none;
-    }
+    body { background: #121212; color: #fff; font-family: sans-serif; padding: 10px; }
+    #messages { list-style: none; padding: 0; max-height: 70vh; overflow-y: scroll; }
+    #messages li { padding: 5px 10px; border-bottom: 1px solid #444; }
+    #form { display: flex; margin-top: 10px; }
+    #input { flex: 1; padding: 10px; font-size: 16px; }
+    #sendBtn { padding: 10px 20px; }
+    .image-msg { max-width: 200px; max-height: 200px; margin-top: 10px; border-radius: 10px; }
+    #imageInput { margin-left: 10px; }
     @media (max-width: 600px) {
-      #input-area { flex-direction: column; }
-      button, label { width: 100%; margin: 5px 0 0; }
+      #input { font-size: 14px; }
+      #sendBtn { padding: 8px; }
     }
   </style>
 </head>
 <body>
-  <div id="chat"></div>
-  <div id="input-area">
-    <textarea id="text" placeholder="Type a message..."></textarea>
-    <label for="file">📷</label>
-    <input type="file" id="file" accept="image/*" />
-    <button id="send">Send</button>
-  </div>
-
-  <script src="/socket.io/socket.io.js"></script>
+  <h2>OrangeTexting</h2>
+  <ul id="messages"></ul>
+  <form id="form">
+    <input id="input" autocomplete="off" placeholder="Type a message..." /><button id="sendBtn">Send</button>
+    <input type="file" id="imageInput" accept="image/*">
+  </form>
+  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
   <script>
     const socket = io();
-    const chat = document.getElementById("chat");
-    const textIn = document.getElementById("text");
-    const fileIn = document.getElementById("file");
-    const sendBtn = document.getElementById("send");
-
-    let user = localStorage.getItem("username");
-    if (!user) {
-      user = prompt("Enter your username") || "Anon";
-      localStorage.setItem("username", user);
+    let username = localStorage.getItem("username");
+    if (!username) {
+      username = prompt("Enter your username:") || "Anonymous";
+      localStorage.setItem("username", username);
     }
 
-    socket.emit("join-room", "main-room");
+    socket.emit('setUsername', username);
 
-    socket.on("receive-message", (msg) => {
-      const d = document.createElement("div");
-      d.className = "msg";
-      const t = new Date(msg.timestamp).toLocaleTimeString();
-      d.innerHTML = `<b>${msg.user} [${t}]:</b> ${msg.text || ""}`;
-      if (msg.imageData) {
-        const img = document.createElement("img");
-        img.src = msg.imageData;
-        d.appendChild(img);
-      }
-      chat.appendChild(d);
-      chat.scrollTop = chat.scrollHeight;
+    const form = document.getElementById('form');
+    const input = document.getElementById('input');
+    const messages = document.getElementById('messages');
+    const imageInput = document.getElementById('imageInput');
+
+    socket.on('init', (msgs) => {
+      msgs.forEach(msg => renderMessage(msg));
     });
 
-    sendBtn.onclick = () => {
-      const txt = textIn.value.trim();
-      const file = fileIn.files[0];
+    socket.on('chat message', (msg) => renderMessage(msg));
+    socket.on('image message', (msg) => renderMessage(msg));
 
-      if (!txt && !file) return;
-
-      if (file) {
-        const reader = new FileReader();
-        reader.onload = () => {
-          socket.emit("send-message", {
-            user,
-            text: txt,
-            imageData: reader.result,
-            timestamp: Date.now()
-          });
-          textIn.value = "";
-          fileIn.value = "";
-        };
-        reader.readAsDataURL(file);
-      } else {
-        socket.emit("send-message", {
-          user,
-          text: txt,
-          imageData: null,
-          timestamp: Date.now()
-        });
-        textIn.value = "";
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      if (input.value) {
+        socket.emit('chat message', input.value);
+        input.value = '';
       }
-    };
+    });
+
+    imageInput.addEventListener('change', () => {
+      const file = imageInput.files[0];
+      if (!file) return;
+      const formData = new FormData();
+      formData.append('image', file);
+
+      fetch('/upload', {
+        method: 'POST',
+        body: formData
+      })
+      .then(res => res.json())
+      .then(data => {
+        socket.emit('image message', data.imageUrl);
+      })
+      .catch(err => console.error('Upload failed', err));
+    });
+
+    function renderMessage(msg) {
+      const item = document.createElement('li');
+      const time = new Date(msg.timestamp).toLocaleTimeString();
+      item.innerHTML = `<strong>${msg.user}</strong> [${time}]: `;
+      if (msg.type === 'text') {
+        item.innerHTML += msg.text;
+      } else if (msg.type === 'image') {
+        const img = document.createElement('img');
+        img.src = msg.image;
+        img.className = "image-msg";
+        item.appendChild(img);
+      }
+      messages.appendChild(item);
+      messages.scrollTop = messages.scrollHeight;
+    }
   </script>
 </body>
 </html>
