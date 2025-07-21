@@ -22,18 +22,17 @@
   <h2>OrangeTexting</h2>
   <ul id="messages"></ul>
   <form id="form">
-    <input id="input" autocomplete="off" placeholder="Type a message..." /><button id="sendBtn">Send</button>
-    <input type="file" id="imageInput" accept="image/*">
+    <input id="input" autocomplete="off" placeholder="Type a message..." />
+    <button id="sendBtn">Send</button>
+    <input type="file" id="imageInput" accept="image/*" />
   </form>
+
   <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
   <script>
     const socket = io();
-    let username = localStorage.getItem("username");
-    if (!username) {
-      username = prompt("Enter your username:") || "Anonymous";
-      localStorage.setItem("username", username);
-    }
 
+    // Ask for username every time
+    let username = prompt("Enter your username:") || "Anonymous";
     socket.emit('setUsername', username);
 
     const form = document.getElementById('form');

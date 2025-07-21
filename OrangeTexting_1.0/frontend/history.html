@@ -4,32 +4,33 @@
   <meta charset="utf-8">
   <title>Chat History</title>
   <style>
-    body { background-color: #111; color: #fff; font-family: sans-serif; padding: 20px; }
-    .msg { margin-bottom: 15px; }
-    img { max-width: 200px; display: block; margin-top: 5px; border-radius: 8px; }
+    body { background: #1e1e1e; color: #fff; font-family: sans-serif; padding: 20px; }
+    h2 { margin-bottom: 20px; }
+    .msg { margin-bottom: 10px; border-bottom: 1px solid #444; padding-bottom: 5px; }
+    img { max-width: 200px; max-height: 200px; display: block; margin-top: 5px; }
   </style>
 </head>
 <body>
   <h2>Chat History</h2>
   <div id="history"></div>
   <script>
-    fetch('/history')
+    fetch("/history")
       .then(res => res.json())
       .then(data => {
-        const container = document.getElementById('history');
+        const history = document.getElementById("history");
         data.forEach(msg => {
-          const div = document.createElement('div');
+          const div = document.createElement("div");
           div.className = "msg";
-          const time = new Date(msg.timestamp).toLocaleString();
+          const time = new Date(msg.timestamp).toLocaleTimeString();
           div.innerHTML = `<strong>${msg.user}</strong> [${time}]: `;
-          if (msg.type === 'text') {
+          if (msg.type === "text") {
             div.innerHTML += msg.text;
-          } else if (msg.type === 'image') {
-            const img = document.createElement('img');
+          } else if (msg.type === "image") {
+            const img = document.createElement("img");
             img.src = msg.image;
             div.appendChild(img);
           }
-          container.appendChild(div);
+          history.appendChild(div);
         });
       });
   </script>
